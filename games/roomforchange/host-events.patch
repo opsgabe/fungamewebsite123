@@ -1,0 +1,175 @@
+diff --git a/roomforchange/roomforchange-html/src/com/sturdyhelmetgames/roomforchange/client/GwtLauncher.java b/roomforchange/roomforchange-html/src/com/sturdyhelmetgames/roomforchange/client/GwtLauncher.java
+index 577b82e..f0f7056 100644
+--- a/roomforchange/roomforchange-html/src/com/sturdyhelmetgames/roomforchange/client/GwtLauncher.java
++++ b/roomforchange/roomforchange-html/src/com/sturdyhelmetgames/roomforchange/client/GwtLauncher.java
+@@ -13,6 +13,7 @@
+    limitations under the License. */
+ package com.sturdyhelmetgames.roomforchange.client;
+ 
++import com.sturdyhelmetgames.roomforchange.GameEvents;
+ import com.sturdyhelmetgames.roomforchange.RoomForChangeGame;
+ import com.badlogic.gdx.ApplicationListener;
+ import com.badlogic.gdx.backends.gwt.GwtApplication;
+@@ -28,6 +29,19 @@ public class GwtLauncher extends GwtApplication {
+ 
+ 	@Override
+ 	public ApplicationListener getApplicationListener() {
++		GameEvents.listener = new GameEvents.Listener() {
++			@Override
++			public void onEvent(String name) {
++				postToHost(name);
++			}
++		};
+ 		return new RoomForChangeGame();
+ 	}
+-}
+\ No newline at end of file
++
++	// Tell the embedding page (if any) what happened, e.g. "win".
++	private static native void postToHost(String name) /*-{
++		if ($wnd.parent && $wnd.parent !== $wnd) {
++			$wnd.parent.postMessage({ source: 'roomforchange', event: name }, '*');
++		}
++	}-*/;
++}
+diff --git a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/GameEvents.java b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/GameEvents.java
+new file mode 100644
+index 0000000..0c9d3e8
+--- /dev/null
++++ b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/GameEvents.java
+@@ -0,0 +1,20 @@
++package com.sturdyhelmetgames.roomforchange;
++
++/**
++ * Lets a platform launcher observe game progress (start, artifact pickups,
++ * game over, win). The web build forwards these to the host page.
++ */
++public class GameEvents {
++
++	public interface Listener {
++		void onEvent(String name);
++	}
++
++	public static Listener listener;
++
++	public static void fire(String name) {
++		if (listener != null) {
++			listener.onEvent(name);
++		}
++	}
++}
+diff --git a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Gem.java b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Gem.java
+index ab1152f..3b9bcf8 100644
+--- a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Gem.java
++++ b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Gem.java
+@@ -13,6 +13,8 @@
+    limitations under the License. */
+ package com.sturdyhelmetgames.roomforchange.entity;
+ 
++import com.sturdyhelmetgames.roomforchange.GameEvents;
++
+ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+ import com.sturdyhelmetgames.roomforchange.assets.Assets;
+ import com.sturdyhelmetgames.roomforchange.level.Level;
+@@ -42,6 +44,7 @@ public class Gem extends Item {
+ 	public void collectItem() {
+ 		super.collectItem();
+ 		level.player.gotGem = true;
++		GameEvents.fire("artifacts:" + level.player.artifactCount());
+ 		aliveTick = ALIVE_TIME_MAX;
+ 	}
+ 
+diff --git a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Player.java b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Player.java
+index 9fca192..37be8b1 100644
+--- a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Player.java
++++ b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Player.java
+@@ -191,6 +191,10 @@ public class Player extends Entity {
+ 		return invulnerableTick > 0f;
+ 	}
+ 
++	public int artifactCount() {
++		return (gotGem ? 1 : 0) + (gotScroll ? 1 : 0) + (gotTalisman ? 1 : 0);
++	}
++
+ 	public boolean canFinishGame() {
+ 		return gotGem && gotScroll && gotTalisman;
+ 	}
+diff --git a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Scroll.java b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Scroll.java
+index 848c018..379f21f 100644
+--- a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Scroll.java
++++ b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Scroll.java
+@@ -13,6 +13,8 @@
+    limitations under the License. */
+ package com.sturdyhelmetgames.roomforchange.entity;
+ 
++import com.sturdyhelmetgames.roomforchange.GameEvents;
++
+ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+ import com.sturdyhelmetgames.roomforchange.assets.Assets;
+ import com.sturdyhelmetgames.roomforchange.level.Level;
+@@ -42,6 +44,7 @@ public class Scroll extends Item {
+ 	public void collectItem() {
+ 		super.collectItem();
+ 		level.player.gotScroll = true;
++		GameEvents.fire("artifacts:" + level.player.artifactCount());
+ 		aliveTick = 10f;
+ 	}
+ 
+diff --git a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Talisman.java b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Talisman.java
+index 1920dce..e29bc07 100644
+--- a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Talisman.java
++++ b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/entity/Talisman.java
+@@ -13,6 +13,8 @@
+    limitations under the License. */
+ package com.sturdyhelmetgames.roomforchange.entity;
+ 
++import com.sturdyhelmetgames.roomforchange.GameEvents;
++
+ import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+ import com.sturdyhelmetgames.roomforchange.assets.Assets;
+ import com.sturdyhelmetgames.roomforchange.level.Level;
+@@ -42,6 +44,7 @@ public class Talisman extends Item {
+ 	public void collectItem() {
+ 		super.collectItem();
+ 		level.player.gotTalisman = true;
++		GameEvents.fire("artifacts:" + level.player.artifactCount());
+ 		aliveTick = ALIVE_TIME_MAX;
+ 	}
+ 
+diff --git a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/screen/GameScreen.java b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/screen/GameScreen.java
+index 58b7010..b8865ab 100644
+--- a/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/screen/GameScreen.java
++++ b/roomforchange/roomforchange/src/com/sturdyhelmetgames/roomforchange/screen/GameScreen.java
+@@ -13,6 +13,8 @@
+    limitations under the License. */
+ package com.sturdyhelmetgames.roomforchange.screen;
+ 
++import com.sturdyhelmetgames.roomforchange.GameEvents;
++
+ import aurelienribon.tweenengine.Tween;
+ import aurelienribon.tweenengine.TweenManager;
+ import aurelienribon.tweenengine.equations.Quad;
+@@ -71,6 +73,7 @@ public class GameScreen extends Basic2DScreen {
+ 		batchMiniMap = new SpriteBatch();
+ 
+ 		level = LabyrinthUtil.generateLabyrinth(4, 4, this);
++		GameEvents.fire("start");
+ 	}
+ 
+ 	@Override
+@@ -320,6 +323,7 @@ public class GameScreen extends Basic2DScreen {
+ 	}
+ 
+ 	public void gameOver() {
++		GameEvents.fire("gameover");
+ 		game.setScreen(new GameOverScreen(game, this));
+ 	}
+ 
+@@ -330,6 +334,7 @@ public class GameScreen extends Basic2DScreen {
+ 	}
+ 
+ 	public void finishGame() {
++		GameEvents.fire("win");
+ 		game.setScreen(new WinTheGameScreen(game, this));
+ 	}
+ 

@@ -9,6 +9,7 @@
   --blue: #2f7cf6;
   --purple: #9b4cf5;
   --orange: #f57c2f;
+  --sand: #c8892f;
   --shadow: 0 6px 20px rgba(40, 30, 90, 0.08);
 }
 
@@ -280,3 +281,76 @@ main {
 }
 .hole.up span { transform: translateY(0); }
 .hole.hit span { transform: translateY(0) scale(0.8) rotate(-15deg); filter: grayscale(1); }
+
+/* Featured card */
+.card-feature { grid-column: 1 / -1; }
+.card .tag {
+  align-self: flex-start;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* Pyramid Raid */
+.raid-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.raid-steps li {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.raid-steps li b { margin-right: 4px; }
+.raid-steps li.current { border-color: var(--sand); color: var(--text); box-shadow: 0 0 0 2px var(--sand) inset; }
+.raid-steps li.done { color: var(--green); border-color: var(--green); }
+.raid-steps li.done::after { content: " ✓"; }
+
+.raid-frame {
+  position: relative;
+  width: 100%;
+  max-width: 960px;
+  aspect-ratio: 3 / 2;
+  background: #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.raid-frame[data-stage="2"] { aspect-ratio: 4 / 3; max-width: 860px; }
+.raid-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
+.raid-frame:fullscreen { max-width: none; border-radius: 0; aspect-ratio: auto; }
+.raid-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: #fff;
+  background: radial-gradient(circle at 50% 40%, rgba(200, 137, 47, 0.45), rgba(20, 14, 6, 0.92) 70%);
+}
+.raid-overlay h2 { margin: 0; font-size: clamp(1.4rem, 4vw, 2.2rem); text-wrap: balance; }
+.raid-overlay p { margin: 0; max-width: 52ch; line-height: 1.5; }
+.raid-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.raid-credits { width: 100%; max-width: 960px; color: var(--muted); font-size: 0.9rem; }
+.raid-credits summary { cursor: pointer; font-weight: 600; }
+.raid-credits p { line-height: 1.5; }
+.raid-overlay[hidden] { display: none; }

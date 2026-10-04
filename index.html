@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fun Game Zone</title>
-  <meta name="description" content="Free, quick browser games: Snake, Tic-Tac-Toe, Memory Match and Whack-a-Mole.">
+  <meta name="description" content="Free browser games: Pyramid Raid, Snake, Tic-Tac-Toe, Memory Match and Whack-a-Mole.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -12,6 +12,7 @@
   <header class="site-header">
     <a href="#" class="logo">🎮 Fun Game Zone</a>
     <nav>
+      <a href="#raid">Pyramid Raid</a>
       <a href="#snake">Snake</a>
       <a href="#tictactoe">Tic-Tac-Toe</a>
       <a href="#memory">Memory</a>
@@ -27,6 +28,13 @@
         <p>No downloads, no sign-ups. Just quick fun in your browser.</p>
       </div>
       <div class="cards">
+        <a class="card card-feature" href="#raid" style="--accent: var(--sand)">
+          <span class="emoji">🏺⚔️</span>
+          <span class="tag">New · 2 stages</span>
+          <h2>Pyramid Raid</h2>
+          <p>Escape a shifting pyramid in a 2D pixel adventure, then fight your way out of a 3D arena. One run, one clock.</p>
+          <span class="best" data-best="raid"></span>
+        </a>
         <a class="card" href="#snake" style="--accent: var(--green)">
           <span class="emoji">🐍</span>
           <h2>Snake</h2>
@@ -51,6 +59,48 @@
           <span class="best" data-best="whack"></span>
         </a>
       </div>
+    </section>
+
+    <!-- Pyramid Raid: Room for Change (stage 1) + BananaBread (stage 2) -->
+    <section id="raid" class="view" hidden>
+      <div class="game-head">
+        <a href="#" class="back">← All games</a>
+        <h1>🏺 Pyramid Raid</h1>
+      </div>
+      <ol class="raid-steps" id="raid-steps">
+        <li data-step="1"><b>Stage 1</b> Escape the pyramid</li>
+        <li data-step="2"><b>Stage 2</b> Arena showdown</li>
+      </ol>
+      <div class="stats">
+        <span>Artifacts: <b id="raid-artifacts">0</b>/3</span>
+        <span>Frags: <b id="raid-frags">0</b>/<span id="raid-target"></span></span>
+        <span>Time: <b id="raid-time">0:00</b></span>
+        <span>Best: <b id="raid-best">–</b></span>
+      </div>
+      <div class="raid-frame" id="raid-frame" data-stage="0">
+        <div class="raid-overlay" id="raid-overlay">
+          <h2 id="raid-ov-title"></h2>
+          <p id="raid-ov-text"></p>
+          <button class="btn" id="raid-ov-btn"></button>
+        </div>
+      </div>
+      <div class="raid-actions">
+        <button class="btn btn-ghost" id="raid-fullscreen">Fullscreen</button>
+        <button class="btn btn-ghost" id="raid-restart">Restart run</button>
+      </div>
+      <p class="hint" id="raid-controls">Needs a keyboard, plus a mouse for stage 2.</p>
+      <details class="raid-credits">
+        <summary>Credits &amp; play each stage on its own</summary>
+        <p><b>Stage 1: Room for Change</b> © 2013 Antti Kolehmainen (Sturdy Helmet Games), Apache License 2.0.
+          Lightly modified so it can tell this page when you pick up artifacts and escape.
+          <a href="https://github.com/antionio/game-off-2013" target="_blank" rel="noopener">Source</a> ·
+          <a href="games/roomforchange/index.html" target="_blank">Play on its own</a></p>
+        <p><b>Stage 2: BananaBread</b> by Alon Zakai and contributors, built on the Cube 2: Sauerbraten engine.
+          Code under the zlib license; artwork under the licenses listed in its
+          <a href="games/bananabread/LICENSE-BananaBread.md" target="_blank">license file</a>.
+          <a href="https://github.com/kripken/BananaBread" target="_blank" rel="noopener">Source</a> ·
+          <a href="games/bananabread/bb.html" target="_blank">Play on its own</a></p>
+      </details>
     </section>
 
     <!-- Snake -->
@@ -124,6 +174,7 @@
   <script src="js/tictactoe.js"></script>
   <script src="js/memory.js"></script>
   <script src="js/whack.js"></script>
+  <script src="js/raid.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

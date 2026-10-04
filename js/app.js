@@ -9,6 +9,10 @@
       snake: (v) => `Best: ${v}`,
       memory: (v) => `Best: ${v} moves`,
       whack: (v) => `Best: ${v} moles`,
+      raid: (v) => {
+        const t = Math.floor(v / 1000);
+        return `Best run: ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+      },
     };
     document.querySelectorAll('[data-best]').forEach((el) => {
       const key = el.dataset.best;
