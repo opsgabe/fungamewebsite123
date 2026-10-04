@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fun Game Zone</title>
+  <meta name="description" content="Free, quick browser games: Snake, Tic-Tac-Toe, Memory Match and Whack-a-Mole.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎮</text></svg>">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="#" class="logo">🎮 Fun Game Zone</a>
+    <nav>
+      <a href="#snake">Snake</a>
+      <a href="#tictactoe">Tic-Tac-Toe</a>
+      <a href="#memory">Memory</a>
+      <a href="#whack">Whack-a-Mole</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Home -->
+    <section id="home" class="view">
+      <div class="hero">
+        <h1>Pick a game. Play instantly.</h1>
+        <p>No downloads, no sign-ups. Just quick fun in your browser.</p>
+      </div>
+      <div class="cards">
+        <a class="card" href="#snake" style="--accent: var(--green)">
+          <span class="emoji">🐍</span>
+          <h2>Snake</h2>
+          <p>Eat the apples, grow longer, don't bite yourself.</p>
+          <span class="best" data-best="snake"></span>
+        </a>
+        <a class="card" href="#tictactoe" style="--accent: var(--blue)">
+          <span class="emoji">❌⭕</span>
+          <h2>Tic-Tac-Toe</h2>
+          <p>Beat the computer, or play a friend on one screen.</p>
+        </a>
+        <a class="card" href="#memory" style="--accent: var(--purple)">
+          <span class="emoji">🃏</span>
+          <h2>Memory Match</h2>
+          <p>Flip cards and find all the pairs in as few moves as you can.</p>
+          <span class="best" data-best="memory"></span>
+        </a>
+        <a class="card" href="#whack" style="--accent: var(--orange)">
+          <span class="emoji">🔨</span>
+          <h2>Whack-a-Mole</h2>
+          <p>30 seconds. How many moles can you bonk?</p>
+          <span class="best" data-best="whack"></span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Snake -->
+    <section id="snake" class="view" hidden>
+      <div class="game-head">
+        <a href="#" class="back">← All games</a>
+        <h1>🐍 Snake</h1>
+      </div>
+      <div class="stats"><span>Score: <b id="snake-score">0</b></span><span>Best: <b id="snake-best">0</b></span></div>
+      <div class="board-wrap">
+        <canvas id="snake-canvas" width="400" height="400"></canvas>
+        <div class="overlay" id="snake-overlay">
+          <p id="snake-msg">Press Start or Space</p>
+          <button class="btn" id="snake-start">Start</button>
+        </div>
+      </div>
+      <div class="dpad" aria-label="Direction controls">
+        <button data-dir="up">▲</button>
+        <button data-dir="left">◀</button>
+        <button data-dir="down">▼</button>
+        <button data-dir="right">▶</button>
+      </div>
+      <p class="hint">Arrow keys / WASD, swipe, or the buttons.</p>
+    </section>
+
+    <!-- Tic-Tac-Toe -->
+    <section id="tictactoe" class="view" hidden>
+      <div class="game-head">
+        <a href="#" class="back">← All games</a>
+        <h1>❌⭕ Tic-Tac-Toe</h1>
+      </div>
+      <div class="controls">
+        <label><input type="radio" name="ttt-mode" value="cpu" checked> vs Computer</label>
+        <label><input type="radio" name="ttt-mode" value="pvp"> 2 Players</label>
+      </div>
+      <p class="status" id="ttt-status">Your turn (X)</p>
+      <div class="ttt-board" id="ttt-board"></div>
+      <div class="stats"><span>X: <b id="ttt-x">0</b></span><span>O: <b id="ttt-o">0</b></span><span>Draws: <b id="ttt-d">0</b></span></div>
+      <button class="btn" id="ttt-reset">New round</button>
+    </section>
+
+    <!-- Memory -->
+    <section id="memory" class="view" hidden>
+      <div class="game-head">
+        <a href="#" class="back">← All games</a>
+        <h1>🃏 Memory Match</h1>
+      </div>
+      <div class="stats"><span>Moves: <b id="mem-moves">0</b></span><span>Pairs: <b id="mem-pairs">0</b>/8</span><span>Best: <b id="mem-best">–</b></span></div>
+      <div class="mem-board" id="mem-board"></div>
+      <p class="status" id="mem-status"></p>
+      <button class="btn" id="mem-reset">Shuffle &amp; restart</button>
+    </section>
+
+    <!-- Whack-a-Mole -->
+    <section id="whack" class="view" hidden>
+      <div class="game-head">
+        <a href="#" class="back">← All games</a>
+        <h1>🔨 Whack-a-Mole</h1>
+      </div>
+      <div class="stats"><span>Score: <b id="whack-score">0</b></span><span>Time: <b id="whack-time">30</b>s</span><span>Best: <b id="whack-best">0</b></span></div>
+      <div class="whack-board" id="whack-board"></div>
+      <p class="status" id="whack-status">Hit Start, then tap the moles!</p>
+      <button class="btn" id="whack-start">Start</button>
+    </section>
+  </main>
+
+  <footer class="site-footer">Made for fun · Scores are saved in your browser</footer>
+
+  <script src="js/storage.js"></script>
+  <script src="js/snake.js"></script>
+  <script src="js/tictactoe.js"></script>
+  <script src="js/memory.js"></script>
+  <script src="js/whack.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
