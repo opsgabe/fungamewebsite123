@@ -395,7 +395,7 @@ export class Renderer {
     window.addEventListener('resize', this._onResize);
     this._contextRestoredHandlers = [];
     this._onContextRestored = () => {
-      for (const fn of this._contextRestoredHandlers) {
+      for (const fn of this._contextRestoredHandlers.slice()) {
         try {
           fn();
         } catch (err) {
@@ -693,9 +693,16 @@ export class Renderer {
     return this.webgl.domElement;
   }
 
-  /** Register a callback for WebGL context restoration (world.js rebuilds its chunk meshes). */
+  /**
+   * Register a callback for WebGL context restoration (world.js rebuilds its chunk meshes). Returns a function
+   * that unregisters it again: the renderer lives for the whole page, so short-lived owners must call it.
+   */
   onContextRestored(fn) {
     this._contextRestoredHandlers.push(fn);
+    return () => {
+      const i = this._contextRestoredHandlers.indexOf(fn);
+      if (i >= 0) this._contextRestoredHandlers.splice(i, 1);
+    };
   }
 
   dispose() {

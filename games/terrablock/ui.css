@@ -786,7 +786,8 @@ body {
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  align-items: stretch;
+  /* The hotbar keeps its own width and stays centred under the crosshair; the stats row spans it. */
+  align-items: center;
   gap: calc(var(--px) * 3);
 }
 .tb-toast {
@@ -808,6 +809,7 @@ body {
   transition: none;
 }
 .tb-stats {
+  align-self: stretch;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: end;

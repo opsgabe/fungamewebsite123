@@ -7,7 +7,7 @@
 
 import * as THREE from '../vendor/three.module.min.js';
 import { REACH_SURVIVAL, REACH_CREATIVE, WORLD_HEIGHT, HOTBAR_SIZE, INVENTORY_SIZE, tileUV } from './config.js';
-import { B, BLOCKS, LIQUID, getBlock } from './blocks.js';
+import { B, BLOCKS, LIQUID, CROSS, getBlock } from './blocks.js';
 import { getItem } from './items.js';
 import * as Textures from './textures.js'; // CRACK_TILES, createAtlas, getAtlasPixels (optional)
 
@@ -321,6 +321,8 @@ export class Interaction {
       obj.geometry.dispose();
       obj.material.dispose();
     }
+    // InstancedMesh.dispose() is what frees the instanceMatrix / instanceColor GPU buffers.
+    this.particles.dispose();
     if (this._ownTexture) this._ownTexture.dispose();
   }
 
@@ -503,20 +505,35 @@ export class Interaction {
     }
   }
 
-  // Removes the block; in survival (harvest = true) its drop goes straight into the inventory.
+  // Removes the block; in survival (harvest = true) its drop goes straight into the inventory. A plant growing
+  // on the block pops off with it (World.setBlock removes it) and drops too.
   _breakBlock(x, y, z, id, harvest) {
     if (this.world.getBlock(x, y, z) !== id) return false;
+    const plant = y + 1 < WORLD_HEIGHT ? this.world.getBlock(x, y + 1, z) : 0;
     if (!this.world.setBlock(x, y, z, B.AIR)) return false;
     const def = getBlock(id);
     this._play('break', { material: def.sound });
     this._spawnParticles(x, y, z, id, 24, null);
-    if (harvest && this.inventory) {
-      const drop = rollDrop(def);
-      if (drop != null && this.inventory.add(drop, 1) === 0) this._play('pop', { volume: 0.3, pitch: rand(1.1, 1.5) });
+    if (harvest) this._collect(rollDrop(def));
+    if (plant > 0 && CROSS[plant] && this.world.getBlock(x, y + 1, z) === B.AIR) {
+      this._spawnParticles(x, y + 1, z, plant, 10, null);
+      if (!this._isCreative()) this._collect(rollDrop(getBlock(plant)));
     }
     const cb = this.callbacks.onBlockBroken;
     if (typeof cb === 'function') cb(x, y, z, id);
     return true;
+  }
+
+  // Puts one dropped item into the inventory; reports it to callbacks.onDropLost when there is no room.
+  _collect(itemId) {
+    if (itemId == null || !this.inventory) return;
+    const left = this.inventory.add(itemId, 1);
+    if (left === 0) {
+      this._play('pop', { volume: 0.3, pitch: rand(1.1, 1.5) });
+    } else {
+      const cb = this.callbacks.onDropLost;
+      if (typeof cb === 'function') cb(itemId, left);
+    }
   }
 
   // ---- placing ---------------------------------------------------------------------------------

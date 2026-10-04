@@ -1,8 +1,9 @@
 // Terrablock persistence: world list, per-world save data and settings in localStorage.
 //
 // Every storage access is wrapped in try/catch. If localStorage is unavailable altogether (blocked
-// cookies, sandboxed iframe), an in-memory store is used so the game still works for the session.
-// Quota errors are reported to the caller (saveWorld/saveSettings return false).
+// cookies, sandboxed iframe), an in-memory store is used so the game still works for the session;
+// isPersistent() then returns false so the game can warn that nothing survives a reload.
+// Quota errors are reported to the caller (createWorld returns null, saveWorld/saveSettings false).
 //
 // Keys:
 //   terrablock:worlds        -> [meta]   meta = { id, name, seed, mode, created, lastPlayed }
@@ -64,6 +65,11 @@ function storage() {
   }
   cachedStorage = memoryStorage;
   return cachedStorage;
+}
+
+/** False when saves only live in memory for this page (localStorage is blocked or unavailable). */
+export function isPersistent() {
+  return storage() !== memoryStorage;
 }
 
 function isQuotaError(err) {
@@ -164,7 +170,7 @@ export function listWorlds() {
     .map(({ id, name, seed, mode, lastPlayed }) => ({ id, name, seed, mode, lastPlayed }));
 }
 
-/** Register a new world and return its meta (with a fresh id). */
+/** Register a new world and return its meta (with a fresh id), or null if storage refused it (full). */
 export function createWorld({ name, seed, mode } = {}) {
   const now = Date.now();
   const list = readIndex();
@@ -179,7 +185,7 @@ export function createWorld({ name, seed, mode } = {}) {
     lastPlayed: now,
   };
   list.push(meta);
-  writeIndex(list);
+  if (!writeIndex(list)) return null;
   return { ...meta };
 }
 
@@ -198,6 +204,8 @@ export function loadWorld(id) {
     survival: data.survival ?? null,
     time: data.time ?? null,
     edits: decodeEdits(edits),
+    // The stored (encoded) form too, so the next save can reuse chunks that haven't changed since.
+    editsEncoded: edits && typeof edits === 'object' ? { ...edits } : {},
     furnaces: data.furnaces ?? null,
   };
 }
@@ -205,9 +213,14 @@ export function loadWorld(id) {
 /**
  * Save a world's state. `data` = { player, inventory, survival, time, edits, furnaces, meta?, ... }.
  * Returns false if storage refused it (quota), true otherwise. Also bumps the world's lastPlayed.
+ * A world missing from the index (deleted in another tab while still being played here) is re-registered,
+ * but only when `meta.seed` is given: without it the terrain under the saved edits could not be rebuilt.
  */
 export function saveWorld(id, data = {}) {
   if (typeof id !== 'string' || !id) return false;
+  const metaIn = data && data.meta && typeof data.meta === 'object' ? data.meta : null;
+  const hasSeed = !!metaIn && metaIn.seed != null && metaIn.seed !== '';
+  if (!hasSeed && !readIndex().some((m) => m.id === id)) return false;
   let payload;
   try {
     const { meta, edits, ...rest } = data || {};
@@ -221,7 +234,6 @@ export function saveWorld(id, data = {}) {
   const list = readIndex();
   const now = Date.now();
   const i = list.findIndex((m) => m.id === id);
-  const metaIn = data && data.meta && typeof data.meta === 'object' ? data.meta : null;
   if (i >= 0) {
     const m = list[i];
     if (metaIn) {
@@ -230,11 +242,12 @@ export function saveWorld(id, data = {}) {
     }
     m.lastPlayed = now;
   } else {
-    // Saved without an index entry (e.g. the index was cleared): re-register it.
-    list.push(cleanMeta({ name: 'World', seed: '', mode: 'survival', created: now, ...(metaIn || {}), id, lastPlayed: now }));
+    // Saved without an index entry (deleted in another tab, or the index was cleared): re-register it.
+    list.push(cleanMeta({ name: 'World', mode: 'survival', created: now, ...metaIn, id, lastPlayed: now }));
   }
-  writeIndex(list);
-  return true;
+  // The world data itself is already stored; a failed index write only loses the lastPlayed bump, unless the
+  // entry is new, in which case the world could not be found again.
+  return writeIndex(list) || i >= 0;
 }
 
 export function deleteWorld(id) {

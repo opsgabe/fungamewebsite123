@@ -163,19 +163,26 @@ export class Renderer {
 export class World {
   constructor({ seed, renderer, renderDistance, edits })   // edits: { "cx,cz": { index: id } } from save
   async init(x, z, onProgress)          // resolves once chunks within radius 2 of (x,z) are generated and meshed
-  update(playerPos)                      // stream nearest-first via a worker pool, unload far chunks (dispose geometries)
+  update(playerPos, dt?)                 // stream nearest-first via a worker pool, unload far chunks (dispose geometries);
+                                         // dt (optional) steps falling blocks, 0 freezes them while paused
   getBlock(x, y, z)                      // id; 0 above WORLD_HEIGHT, BEDROCK below 0, -1 if chunk not loaded
   setBlock(x, y, z, id)                  // -> bool; records edit; remeshes synchronously on the main thread (+ border neighbours);
                                          // sand/gravel above an emptied cell fall to the first non-air cell below
   isSolid(x, y, z)                       // unloaded counts as solid
   highestBlockAt(x, z)                   // y of topmost solid block, -1 if none / unloaded
+  isEdited(x, y, z)                      // the cell differs from generated terrain (mobs: no cave spawns in player builds)
   setRenderDistance(n); getEdits(); stats() -> { loaded, meshed, pending }; dispose();
+  editRevision; getEditsDelta(since)     // -> { rev, changed: { key: edits copy | null } } for incremental saving
 }
+// Renderer.onContextRestored(fn) returns an unsubscribe function (World.dispose calls it).
 // save.js (localStorage; every access wrapped in try/catch)
 export function listWorlds()             // [{ id, name, seed, mode, lastPlayed }], newest first
-export function createWorld({ name, seed, mode }) // -> meta with id
-export function loadWorld(id)            // -> { meta, player, inventory, survival, time, edits, furnaces } | null
-export function saveWorld(id, data)      // -> bool (false on quota errors)
+export function createWorld({ name, seed, mode }) // -> meta with id, or null when storage is full
+export function loadWorld(id)            // -> { meta, player, inventory, survival, time, edits, editsEncoded, furnaces } | null
+export function saveWorld(id, data)      // -> bool (false on quota errors); re-registers a world missing from the
+                                         //    index only when data.meta.seed is given
+export function isPersistent()           // false when localStorage is blocked and saves only live in memory
+export function encodeEdits(edits)       // { key: { index: id } } -> { key: base64 } (strings pass through)
 export function deleteWorld(id)
 export function loadSettings(); export function saveSettings(s)   // { renderDistance, fov, sensitivity, invertY, volume }
 ```
@@ -192,7 +199,9 @@ export class Player {
   setMode(mode); teleport(x, y, z); update(dt);
   getEyePosition(); getLookDirection(); isInWater(); isHeadInWater(); getAABB();
   onFall = null;   // (distance) => {}  set by main; survival fall damage = max(0, ceil(distance - 3))
+                   // (distance is rounded to 1e-4, so a drop of exactly N blocks reports N)
   toJSON(); fromJSON(obj);
+  requestPointerLock() // -> Promise<boolean> (lock granted) or null where the browser returns no promise
 }
 ```
 Controls: WASD move, mouse look (pointer lock on `domElement`), Space jump / swim up / fly up, double-tap Space
@@ -202,7 +211,7 @@ movement, buoyant swim. Camera at eye height with slight FOV boost when sprintin
 ```js
 export class Interaction {
   constructor({ world, player, renderer, inventory, survival, mobs, sounds, getMode, callbacks })
-  // callbacks: { onUseBlock(x, y, z, id) -> bool, onBlockBroken(x, y, z, id) }
+  // callbacks: { onUseBlock(x, y, z, id) -> bool, onBlockBroken(x, y, z, id), onDropLost?(itemId, count) }
   enabled; target;  // { x, y, z, id, normal: [nx,ny,nz] } | null
   update(dt);
 }
@@ -247,6 +256,7 @@ export class UI {
   showHUD(mode); updateHUD(); setDebug(lines | null); showMessage(text);
   openInventory(kind /* 'player' | 'crafting_table' | 'furnace' */, context); closeScreens(); isScreenOpen();
   showPause(); hidePause(); showDeath(); hideAll();
+  getCraftingState(); setCraftingState(state) // stacks parked in the crafting grids + the cursor stack (saved by main)
   setInventory(inventory); setSurvival(survival); setFurnaces(furnaces); setMode(mode);
 }
 ```
@@ -263,7 +273,7 @@ Death screen with Respawn. Responsive and keyboard accessible; works at 1280x720
 ### mobs.js (G)
 ```js
 export class MobManager {
-  constructor({ world, renderer, player, survival, inventory, sounds, getMode })
+  constructor({ world, renderer, player, survival, inventory, sounds, getMode, onDropLost? })
   update(dt, { timeOfDay, isNight });
   attack(origin, dir, reach, damage) -> bool;   // ray vs mob AABBs; knockback; drops into inventory on death
   count; clear(); dispose();
@@ -281,4 +291,18 @@ loading screen, place player (saved position or `findSpawn`), creative starter h
 Loop: clamp dt to 0.05, update player, interaction, mobs, furnaces, survival, world streaming, time of day,
 renderer; HUD refresh; autosave every 30 s and on `pagehide`/save & quit. Pointer lock: click canvas to lock;
 unlocking opens the pause menu unless a UI screen is open. Death -> death screen -> respawn at spawn with an
-empty inventory (survival).
+empty inventory (survival). Only one pointer-lock request is in flight at a time, only losing a lock that was
+actually held pauses, and a lock granted after the game moved on (paused, a screen opened) is released again.
+After a respawn or loading a world, a player whose body overlaps solid blocks is moved up to the first free
+spot in the column once that chunk is loaded (a free spawn under a roof is left alone).
+
+Save data written by main.js: `{ meta, spawn, player, inventory, survival, furnaces, crafting, time, day, edits }`
+(`meta` carries name, mode and seed; `crafting` is `ui.getCraftingState()`; `time` is t in [0,1), `day` counts
+completed days; a player saved while dead is stored as already respawned). Edits are encoded incrementally: only
+chunks changed since the previous save (`World.getEditsDelta`) are re-encoded. Autosave runs every 30 s of real
+time while playing or paused, plus on `pagehide`, `visibilitychange` (hidden) and Save & Quit.
+
+Test hook: `window.__terrablock` exposes getters for `session`, `player`, `world`, `inventory`, `survival`, `mobs`,
+`interaction`, `furnaces`, `ui`, `renderer`, `sounds` and `settings`, plus `setTime(t)`, `getTime()`, `save()`,
+`quit()` and `debugLines()`, so automated tests can drive the game when pointer lock is unavailable
+(`player.applyLook`, `player.setKey`, `interaction.setButton`).

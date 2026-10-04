@@ -10,6 +10,7 @@
   --purple: #9b4cf5;
   --orange: #f57c2f;
   --sand: #c8892f;
+  --grass: #2f7d32;
   --shadow: 0 6px 20px rgba(40, 30, 90, 0.08);
 }
 
@@ -21,6 +22,7 @@
     --muted: #a19dbd;
     --border: #322e48;
     --primary: #9a82ff;
+    --grass: #6fcf5b;
     --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     color-scheme: dark;
   }
@@ -32,6 +34,7 @@
   --muted: #a19dbd;
   --border: #322e48;
   --primary: #9a82ff;
+  --grass: #6fcf5b;
   --shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
   color-scheme: dark;
 }

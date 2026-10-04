@@ -916,8 +916,10 @@ class Mob {
 // The manager.
 
 export class MobManager {
-  constructor({ world, renderer, player, survival, inventory, sounds, getMode } = {}) {
+  // onDropLost (optional): (itemId, count) => {} when a kill's drop doesn't fit in the inventory.
+  constructor({ world, renderer, player, survival, inventory, sounds, getMode, onDropLost = null } = {}) {
     this.world = world;
+    this.onDropLost = typeof onDropLost === 'function' ? onDropLost : null;
     this.renderer = renderer;
     this.player = player;
     this.survival = survival;
@@ -1124,6 +1126,19 @@ export class MobManager {
       if (id < 0 || idIsSolid(id) || id === B.WATER) return false;
     }
     return true;
+  }
+
+  // Only natural darkness breeds monsters. There are no light sources to make a shelter safe, so a spot the
+  // player dug out, or one under anything the player placed (a house's roof, upper floor or wall), doesn't
+  // count as a cave. Checks the two body cells at (x, y, z) and the column above them up to `top`.
+  _playerMade(x, y, z, top) {
+    const w = this.world;
+    if (typeof w.isEdited !== 'function') return false;
+    if (w.isEdited(x, y, z) || w.isEdited(x, y + 1, z)) return true;
+    for (let yy = y + 2; yy <= top; yy++) {
+      if (w.isEdited(x, yy, z) && this._block(x, yy, z) > 0) return true;
+    }
+    return false;
   }
 
   // True when no opaque block hangs over (x, z) at or above y.
@@ -1420,7 +1435,8 @@ export class MobManager {
         }
       }
       if (found < 0 || found + 2 > top - 1) continue;
-      if (this._skyExposed(x + 0.5, found + 2, z + 0.5)) continue; // must be roofed by opaque rock
+      if (this._skyExposed(x + 0.5, found + 2, z + 0.5)) continue; // must be roofed by opaque blocks
+      if (this._playerMade(x, found, z, top)) continue;
       if (!this._farEnough(x + 0.5, found, z + 0.5, c, 12)) continue;
       this._spawn(this._pickHostile(), x + 0.5, found, z + 0.5);
       return true;
@@ -1932,7 +1948,8 @@ export class MobManager {
         if (n <= 0) continue;
         try {
           const left = this.inventory.add(d.id, n);
-          if (!(left >= n)) gotAny = true; // anything accepted (leftovers are lost when the inventory is full)
+          if (!(left >= n)) gotAny = true; // anything accepted
+          if (left > 0 && this.onDropLost) this.onDropLost(d.id, left); // no room: the rest is lost
         } catch (err) {
           console.warn('mobs: inventory.add failed', err);
         }

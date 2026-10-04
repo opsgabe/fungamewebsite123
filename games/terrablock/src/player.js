@@ -42,6 +42,10 @@ const SWIM_UP_SPEED = 3.4;
 const SWIM_SINK_SPEED = -1.6;
 const SWIM_DIVE_SPEED = -4;
 const WATER_CLIMB_SPEED = 5.6; // boost when pushing against a wall while swimming up (climb out of water)
+// Climbing out onto a bank one block above the water's top block needs a full jump: leaving the water at the
+// top of that block, JUMP_VELOCITY rises a further ~1.27 blocks, enough to clear the bank's edge.
+const WATER_EXIT_SPEED = JUMP_VELOCITY;
+const WATER_EXIT_PROBE = 0.25; // how far into the bank the clearance test looks
 const SPRINT_JUMP_BOOST = 1.4; // extra forward speed on a sprint jump
 const ACCEL_GROUND = 16; // 1/s, how quickly velocity reaches the target on ground
 const ACCEL_ICE = 1.6;
@@ -105,6 +109,8 @@ export class Player {
     this._lastSpaceTap = -1e9;
     this._inWater = false;
     this._collidedH = false;
+    this._hitX = 0; // sign of the last horizontal move blocked along x / z (0 = not blocked)
+    this._hitZ = 0;
     this._frozen = false;
     this._stepDist = STRIDE * 0.6;
     this._swimDist = 0;
@@ -143,11 +149,17 @@ export class Player {
     return this._enabled;
   }
 
+  // Disabling stops movement (see _readInput) but keeps tracking which keys are physically held, so a key
+  // still held when input comes back (Shift while sneaking at a ledge, W) applies again at once. Modifier
+  // keys don't auto-repeat on every platform, so they would otherwise stay lost until pressed again.
   set enabled(v) {
     v = !!v;
     if (v === this._enabled) return;
     this._enabled = v;
-    if (!v) this._releaseAll();
+    if (!v) {
+      this._sprintTap = false;
+      this.sprinting = false;
+    }
   }
 
   setMode(mode) {
@@ -169,26 +181,43 @@ export class Player {
     this._updateCamera(0);
   }
 
-  // Requests pointer lock on domElement (call from a click handler). Safe if unsupported / rejected.
+  // Requests pointer lock on domElement (call from a click or key handler). Safe if unsupported / rejected.
+  // Returns a Promise<boolean> (lock granted or not) in browsers whose requestPointerLock returns a promise,
+  // otherwise null (the caller then relies on pointerlockchange / pointerlockerror events).
   requestPointerLock() {
     const el = this.domElement;
-    if (!el || !el.requestPointerLock) return;
-    try {
-      const p = el.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) {
-        p.catch(() => {
-          // unadjustedMovement is not supported everywhere; retry plainly.
-          try {
-            const q = el.requestPointerLock();
-            if (q && q.catch) q.catch(() => {});
-          } catch {
-            /* ignore */
-          }
-        });
+    if (!el || !el.requestPointerLock) return null;
+    const plain = () => {
+      try {
+        const q = el.requestPointerLock();
+        return q && typeof q.then === 'function' ? q.then(() => true, () => false) : null;
+      } catch {
+        return Promise.resolve(false);
       }
+    };
+    if (rawMouseSupported === false) return plain();
+    let p;
+    try {
+      p = el.requestPointerLock({ unadjustedMovement: true });
     } catch {
-      /* ignore */
+      rawMouseSupported = false;
+      return plain();
     }
+    if (!p || typeof p.then !== 'function') return null;
+    return p.then(
+      () => {
+        rawMouseSupported = true;
+        return true;
+      },
+      (err) => {
+        // unadjustedMovement is not supported everywhere: remember that and retry plainly.
+        if (err && err.name === 'NotSupportedError') {
+          rawMouseSupported = false;
+          return plain() || false;
+        }
+        return false;
+      },
+    );
   }
 
   // Applies a mouse movement in pixels (pointer-lock movementX/Y). Public so tests and touch controls
@@ -205,11 +234,11 @@ export class Player {
     if (this.yaw > Math.PI || this.yaw <= -Math.PI) this.yaw -= Math.round(this.yaw / (2 * Math.PI)) * 2 * Math.PI;
   }
 
-  // Press / release a key by KeyboardEvent.code (test hook; respects `enabled` like real input).
+  // Press / release a key by KeyboardEvent.code (test hook; behaves like a real key event: the key is
+  // tracked while input is disabled, but only acts once input is enabled).
   setKey(code, down) {
     if (down) {
-      if (!this._enabled) return;
-      if (!this.keys.has(code)) this._keyPressed(code);
+      if (this._enabled && !this.keys.has(code)) this._keyPressed(code);
       this.keys.add(code);
     } else {
       this.keys.delete(code);
@@ -335,10 +364,14 @@ export class Player {
 
   _onKeyDown(e) {
     if (!MOVE_KEYS.has(e.code) || isTypingTarget(e.target)) return;
-    if (!this._enabled) return;
-    // Stop the page from scrolling, and block browser shortcuts while Ctrl-sprinting where possible.
-    if (e.code === 'Space' || e.code.startsWith('Arrow') || (e.ctrlKey && e.code.startsWith('Key'))) e.preventDefault();
-    if (!e.repeat && !this.keys.has(e.code)) this._keyPressed(e.code);
+    // While disabled (a UI screen or menu is open) the key is only tracked: the UI owns the event.
+    if (this._enabled) {
+      // Stop the page from scrolling, and block browser shortcuts while Ctrl-sprinting where possible.
+      if (e.code === 'Space' || e.code.startsWith('Arrow') || (e.ctrlKey && e.code.startsWith('Key'))) e.preventDefault();
+      // e.timeStamp is when the key actually went down, so a slow frame between two taps doesn't stretch
+      // the measured interval past the double-tap window.
+      if (!e.repeat && !this.keys.has(e.code)) this._keyPressed(e.code, e.timeStamp > 0 ? e.timeStamp : nowMs());
+    }
     this.keys.add(e.code);
   }
 
@@ -347,8 +380,7 @@ export class Player {
   }
 
   // Edge-triggered key actions: double-tap W sprints, double-tap Space toggles flight in creative.
-  _keyPressed(code) {
-    const t = nowMs();
+  _keyPressed(code, t = nowMs()) {
     if (code === 'KeyW' || code === 'ArrowUp') {
       if (t - this._lastWTap < DOUBLE_TAP_MS) this._sprintTap = true;
       this._lastWTap = t;
@@ -559,6 +591,57 @@ export class Player {
     return false;
   }
 
+  // Is any cell of the box's footprint at height y water?
+  _footprintHasWater(y) {
+    const b = this._box;
+    const x0 = Math.floor(b[0] + EPS);
+    const x1 = Math.floor(b[3] - EPS);
+    const z0 = Math.floor(b[2] + EPS);
+    const z1 = Math.floor(b[5] - EPS);
+    for (let x = x0; x <= x1; x++) {
+      for (let z = z0; z <= z1; z++) {
+        const id = this.world.getBlock(x, y, z);
+        if (id > 0 && LIQUID[id]) return true;
+      }
+    }
+    return false;
+  }
+
+  // Would the box, with its feet at y and shifted horizontally by (ox, oz), overlap a blocking cell?
+  _boxBlockedAt(ox, y, oz) {
+    const b = this._box;
+    const x0 = Math.floor(b[0] + ox + EPS);
+    const x1 = Math.floor(b[3] + ox - EPS);
+    const z0 = Math.floor(b[2] + oz + EPS);
+    const z1 = Math.floor(b[5] + oz - EPS);
+    const y0 = Math.floor(y + EPS);
+    const y1 = Math.floor(y + PLAYER_HEIGHT - EPS);
+    for (let yy = y0; yy <= y1; yy++) {
+      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) if (this._blocks(x, yy, z)) return true;
+    }
+    return false;
+  }
+
+  // Climbing out of water: the player floats with the feet in the top layer of water while pushing against a
+  // bank (the last horizontal move was blocked). Returns the upward speed that carries them onto the bank
+  // (level with the water's top block, or one block above it), or 0 when there is no bank to climb onto: a
+  // taller wall, a ceiling overhead, or the feet deeper than the top layer of water.
+  _waterExitSpeed() {
+    const sx = this._hitX;
+    const sz = this._hitZ;
+    if (!sx && !sz) return 0;
+    const fy = Math.floor(this._box[1] + EPS);
+    if (!this._footprintHasWater(fy) || this._footprintHasWater(fy + 1)) return 0;
+    const ox = sx * WATER_EXIT_PROBE;
+    const oz = sz * WATER_EXIT_PROBE;
+    for (let k = 1; k <= 2; k++) {
+      const y = fy + k;
+      if (this._boxBlockedAt(0, y, 0)) return 0; // no headroom to rise
+      if (!this._boxBlockedAt(ox, y, oz)) return k === 1 ? WATER_CLIMB_SPEED : WATER_EXIT_SPEED;
+    }
+    return 0;
+  }
+
   // Block id the player stands on (centre first, then the footprint corners), or -1.
   _groundBlock() {
     const p = this.position;
@@ -620,7 +703,12 @@ export class Player {
     } else if (inWater) {
       const target = inp.jump ? SWIM_UP_SPEED : inp.sneak ? SWIM_DIVE_SPEED : SWIM_SINK_SPEED;
       v.y += (target - v.y) * (1 - Math.exp(-5 * h));
-      if (inp.jump && this._collidedH) v.y = Math.max(v.y, WATER_CLIMB_SPEED);
+      if (inp.jump && this._collidedH) v.y = Math.max(v.y, WATER_CLIMB_SPEED, this._waterExitSpeed());
+    } else if (inp.jump && !this.onGround && this._collidedH) {
+      // Floating at the surface (the body is above the swim slice, the feet still in water) against a bank:
+      // climb out onto it.
+      const boost = this._waterExitSpeed();
+      if (boost > v.y) v.y = boost;
     } else if (inp.jump && this.onGround) {
       v.y = JUMP_VELOCITY;
       this.onGround = false;
@@ -663,6 +751,8 @@ export class Player {
     this._moveBox(2, rz);
     if (rz !== dz) v.z = 0;
     this._collidedH = rx !== dx || rz !== dz;
+    this._hitX = rx !== dx ? Math.sign(dx) : 0;
+    this._hitZ = rz !== dz ? Math.sign(dz) : 0;
 
     this.position.x += rx;
     this.position.y += ry;
@@ -695,7 +785,9 @@ export class Player {
   }
 
   _land(inWater) {
-    const d = this.fallDistance;
+    // The distance is a sum of many substep moves; round off the float noise so a drop of exactly N blocks
+    // reports N (otherwise ceil(distance - 3) turns 3.0000000000000386 into a whole half-heart of damage).
+    const d = Math.round(this.fallDistance * 1e4) / 1e4;
     this.fallDistance = 0;
     this._stepDist = 0;
     if (d <= 0 || inWater) return;
@@ -783,6 +875,9 @@ const CORNERS = [
   [-HALF_W, HALF_W - 1e-4],
   [HALF_W - 1e-4, HALF_W - 1e-4],
 ];
+
+// Whether the browser accepts { unadjustedMovement } (raw mouse input) for pointer lock; null = unknown.
+let rawMouseSupported = null;
 
 function clampNum(v, lo, hi) {
   v = Number(v) || 0;

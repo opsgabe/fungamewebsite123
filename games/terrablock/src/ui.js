@@ -67,7 +67,7 @@ const CONTROLS = [
   ['Mouse', 'Look around'],
   ['Space', 'Jump / swim up / fly up'],
   ['Shift', 'Sneak / fly down'],
-  ['Ctrl or W W', 'Sprint'],
+  ['W W (double-tap)', 'Sprint'],
   ['Space Space', 'Toggle flying (Creative)'],
   ['Left click', 'Break blocks / attack'],
   ['Right click', 'Place / use / eat'],
@@ -590,6 +590,52 @@ export class UI {
 
   isScreenOpen() {
     return !!this.screen;
+  }
+
+  // Items that live in the UI rather than the inventory: stacks parked in the crafting grids when the
+  // inventory was full, and a stack held by the mouse while a screen is open. main.js saves these with the
+  // world so nothing disappears on Save & Quit, a reload or an autosave taken with a screen open.
+  getCraftingState() {
+    const copy = (g) => g.map((st) => (st ? { id: st.id, count: st.count } : null));
+    return {
+      grid2: copy(this.grids[2]),
+      grid3: copy(this.grids[3]),
+      cursor: this.cursor ? { id: this.cursor.id, count: this.cursor.count } : null,
+    };
+  }
+
+  // Restores getCraftingState() output (or clears the grids for null) when a world starts. A saved cursor
+  // stack goes back into the inventory, or into a free grid slot when the inventory is full.
+  setCraftingState(state) {
+    if (this.screen) this._closeScreen(false);
+    this.cursor = null;
+    const valid = (st) => {
+      if (!st || typeof st !== 'object') return null;
+      const id = Number(st.id);
+      const count = Math.floor(Number(st.count));
+      if (!getItem(id) || !(count > 0)) return null;
+      return { id, count: Math.min(count, maxStackOf(id)) };
+    };
+    const load = (size, src) => {
+      const g = this.grids[size];
+      for (let i = 0; i < g.length; i++) g[i] = Array.isArray(src) ? valid(src[i]) : null;
+    };
+    const st = state && typeof state === 'object' ? state : {};
+    load(2, st.grid2);
+    load(3, st.grid3);
+    const c = valid(st.cursor);
+    if (c) {
+      let left = this.inventory ? this.inventory.add(c.id, c.count) : c.count;
+      for (const g of [this.grids[2], this.grids[3]]) {
+        const j = left > 0 ? g.findIndex((x) => !x) : -1;
+        if (j >= 0) {
+          g[j] = { id: c.id, count: left };
+          left = 0;
+        }
+      }
+      if (left > 0) this.showMessage(`Inventory full: ${left} × ${itemName(c.id)} lost`);
+    }
+    return this.grids[2].some(Boolean) || this.grids[3].some(Boolean);
   }
 
   showPause() {
@@ -1263,7 +1309,19 @@ export class UI {
     this.px = px;
     this.fsPx = fs;
     this.iconPx = Math.round(slot * 0.72);
-    this.hudK = px; // CSS px per sprite pixel for hearts / food / air
+    // CSS px per sprite pixel for hearts / food / air (99 x 8 sprite px each). The hearts and food rows sit
+    // side by side over the hotbar, so on narrow windows shrink them to fit its width, in whole device pixels.
+    const hotbarW = 9 * slot + 8 * gap + 6 * px;
+    const d = dprOf();
+    let k = px;
+    if (2 * 99 * k + 6 * px > hotbarW) k = Math.max(1 / d, Math.floor(((hotbarW - 6 * px) / 198) * d) / d);
+    this.hudK = k;
+    // Size every stat canvas now: one that hasn't been drawn yet (creative mode, air while dry) would keep
+    // the default 300 px canvas width and stretch the HUD off-centre.
+    for (const c of [this.el.hearts, this.el.food, this.el.air]) {
+      c.style.width = 99 * k + 'px';
+      c.style.height = 8 * k + 'px';
+    }
     const st = this.root.style;
     st.setProperty('--slot', slot + 'px');
     st.setProperty('--px', px + 'px');
@@ -1903,6 +1961,7 @@ export class UI {
     cancelAnimationFrame(this._timers.raf);
     clearInterval(this._timers.book);
     const inv = this.inventory;
+    let parked = false; // something had to stay in the crafting grid
     // Crafting grid items go back to the inventory (anything that doesn't fit stays in the grid).
     if (sc.grid && inv) {
       for (let j = 0; j < sc.grid.length; j++) {
@@ -1910,6 +1969,7 @@ export class UI {
         if (!s) continue;
         const left = inv.add(s.id, s.count);
         sc.grid[j] = left > 0 ? { id: s.id, count: left } : null;
+        if (left > 0) parked = true;
       }
     }
     if (this.cursor) {
@@ -1920,6 +1980,7 @@ export class UI {
         if (j >= 0) {
           sc.grid[j] = { id: c.id, count: left };
           left = 0;
+          parked = true;
         }
       }
       if (left > 0 && sc.furnace && !sc.furnace.input) {
@@ -1928,6 +1989,13 @@ export class UI {
       }
       if (left > 0) this.showMessage(`Inventory full: ${left} × ${itemName(c.id)} lost`);
       this.cursor = null;
+    }
+    if (parked) {
+      this.showMessage(
+        sc.gridSize === 3
+          ? 'Inventory full: the rest stays in the crafting table grid.'
+          : 'Inventory full: the rest stays in your crafting grid (press E).',
+      );
     }
     if (inv) inv.changed();
     if (sc.furnace && this.furnaces) this.furnaces.changed(sc.key);

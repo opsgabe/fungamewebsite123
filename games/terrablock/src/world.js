@@ -25,7 +25,7 @@ import {
   chunkKey,
   tileUV,
 } from './config.js';
-import { BLOCKS, SOLID, faceTile } from './blocks.js';
+import { BLOCKS, SOLID, CROSS, faceTile } from './blocks.js';
 import { generateChunk } from './worldgen.js';
 import { buildChunkMesh } from './mesher.js';
 import { prepareGeometry } from './chunkworker.js';
@@ -116,6 +116,12 @@ export class World {
     this.renderer = renderer;
     this.renderDistance = clampRenderDistance(renderDistance);
     this.edits = sanitizeEdits(edits);
+    // Edit revisions for incremental saving (getEditsDelta): a counter bumped on every change to `edits`,
+    // and the revision at which each chunk's edits last changed.
+    this._rev = 0;
+    this._editRevs = new Map(); // "cx,cz" -> revision
+    this._overlayKeys = new Set(); // chunks the last delta reported with falling blocks overlaid
+    for (const key of Object.keys(this.edits)) this._editRevs.set(key, ++this._rev);
 
     this.chunks = new Map(); // nkey -> Chunk
     this.group = new THREE.Group();
@@ -150,7 +156,9 @@ export class World {
     this._startPool();
 
     if (renderer.setRenderDistance) renderer.setRenderDistance(this.renderDistance);
-    if (renderer.onContextRestored) renderer.onContextRestored(() => this._onContextRestored());
+    // The renderer outlives every world: unsubscribe in dispose() so a disposed world can be collected.
+    const off = renderer.onContextRestored ? renderer.onContextRestored(() => this._onContextRestored()) : null;
+    this._offContextRestored = typeof off === 'function' ? off : null;
   }
 
   // ===========================================================================================
@@ -224,12 +232,17 @@ export class World {
     });
   }
 
-  /** Stream chunks around the player, upload finished meshes, animate falling blocks, cull. */
-  update(playerPos) {
+  /**
+   * Stream chunks around the player, upload finished meshes, animate falling blocks, cull.
+   * `dt` (optional, seconds) is the simulation step for falling blocks, so they freeze with the rest of the
+   * game while it is paused (dt = 0); without it they follow the wall clock.
+   */
+  update(playerPos, dt) {
     if (this._disposed) return;
     const now = performance.now();
-    const dt = Math.min(0.05, Math.max(0, (now - this._lastTime) / 1000));
+    const wall = Math.min(0.05, Math.max(0, (now - this._lastTime) / 1000));
     this._lastTime = now;
+    dt = Number.isFinite(dt) ? Math.min(0.05, Math.max(0, dt)) : wall;
 
     if (playerPos && Number.isFinite(playerPos.x) && Number.isFinite(playerPos.z)) {
       const cx = Math.floor(Math.floor(playerPos.x) / CHUNK_SIZE);
@@ -259,6 +272,19 @@ export class World {
     const c = this._chunkAt(x >> 4, z >> 4);
     if (!c || !c.data) return -1;
     return c.data[(x & 15) + ((z & 15) << 4) + (y << 8)];
+  }
+
+  /**
+   * True when the block at (x, y, z) differs from the generated terrain (the player placed, dug out or
+   * changed it). False for untouched or unloaded cells.
+   */
+  isEdited(x, y, z) {
+    y = Math.floor(y);
+    if (y < 0 || y >= WORLD_HEIGHT) return false;
+    x = Math.floor(x);
+    z = Math.floor(z);
+    const e = this.edits[chunkKey(x >> 4, z >> 4)];
+    return !!e && ((x & 15) + ((z & 15) << 4) + (y << 8)) in e;
   }
 
   /** Solid for collision; unloaded chunks count as solid. */
@@ -302,10 +328,12 @@ export class World {
     try {
       this._write(c, idx, id);
       this._queueRemesh(c, lx, lz);
-      // A cell that can no longer support a block lets the gravity block above it fall...
+      // A cell that can no longer support a block lets the gravity block above it fall, and the flower,
+      // tall grass or dead bush growing on it pop off (Interaction hands out the plant's drop)...
       if (SOLID[id] !== 1 && y + 1 < WORLD_HEIGHT) {
         const above = c.data[idx + 256];
         if (FALLS[above]) this._startFalling(x, y + 1, z, above);
+        else if (CROSS[above]) this.setBlock(x, y + 1, z, AIR);
       }
       // ...and a gravity block placed over a non-solid cell falls straight away.
       if (FALLS[id] && y > 0 && SOLID[c.data[idx - 256]] !== 1 && c.data[idx] === id) this._startFalling(x, y, z, id);
@@ -336,15 +364,53 @@ export class World {
       out[key] = { ...e };
     }
     for (const f of this._falling) {
-      const land = this._landingY(f.x, Math.floor(f.y), f.z);
-      if (land === null) continue;
-      let y = land;
-      while (y < WORLD_HEIGHT && this.isSolid(f.x, y, f.z)) y++;
-      if (y >= WORLD_HEIGHT) continue;
+      const cell = this._fallingRestCell(f);
+      if (cell === null) continue;
       const key = chunkKey(f.x >> 4, f.z >> 4);
-      (out[key] || (out[key] = {}))[(f.x & 15) + ((f.z & 15) << 4) + (y << 8)] = f.id;
+      (out[key] || (out[key] = {}))[cell] = f.id;
     }
     return out;
+  }
+
+  // Chunk-local index of the cell a falling block will come to rest in, or null if unknown.
+  _fallingRestCell(f) {
+    const land = this._landingY(f.x, Math.floor(f.y), f.z);
+    if (land === null) return null;
+    let y = land;
+    while (y < WORLD_HEIGHT && this.isSolid(f.x, y, f.z)) y++;
+    if (y >= WORLD_HEIGHT) return null;
+    return (f.x & 15) + ((f.z & 15) << 4) + (y << 8);
+  }
+
+  /** Current edit revision (see getEditsDelta). */
+  get editRevision() {
+    return this._rev;
+  }
+
+  /**
+   * Edits changed since revision `since` (the `rev` of an earlier call; 0 = all of them), for incremental
+   * saving: -> { rev, changed: { "cx,cz": { index: id } (a copy) | null (the chunk has no edits left) } }.
+   * Falling blocks are overlaid at their landing cells like getEdits(); those chunks are reported again by
+   * the next call, by which time the block has landed (or vanished).
+   */
+  getEditsDelta(since = 0) {
+    const changed = {};
+    const add = (key) => {
+      const e = this.edits[key];
+      changed[key] = e && !isEmpty(e) ? { ...e } : null;
+    };
+    for (const [key, rev] of this._editRevs) if (rev > since) add(key);
+    for (const key of this._overlayKeys) if (!(key in changed)) add(key);
+    this._overlayKeys.clear();
+    for (const f of this._falling) {
+      const cell = this._fallingRestCell(f);
+      if (cell === null) continue;
+      const key = chunkKey(f.x >> 4, f.z >> 4);
+      if (!(key in changed)) add(key);
+      (changed[key] || (changed[key] = {}))[cell] = f.id;
+      this._overlayKeys.add(key);
+    }
+    return { rev: this._rev, changed };
   }
 
   stats() {
@@ -365,6 +431,8 @@ export class World {
   dispose() {
     if (this._disposed) return;
     this._disposed = true;
+    if (this._offContextRestored) this._offContextRestored();
+    this._offContextRestored = null;
     for (const s of this._slots) s.worker.terminate();
     this._slots = [];
     this._jobs.clear();
@@ -410,6 +478,7 @@ export class World {
       if (!e) e = this.edits[c.skey] = {};
       e[idx] = id;
     }
+    this._editRevs.set(c.skey, ++this._rev);
   }
 
   // Generated data arrived: overlay saved edits, then let neighbours that were meshed without it remesh.
@@ -423,6 +492,7 @@ export class World {
         const v = e[k];
         if (data[i] === v) {
           delete e[k]; // redundant edit (matches the generated block)
+          this._editRevs.set(c.skey, ++this._rev);
         } else {
           c.base.set(i, data[i]);
           data[i] = v;
