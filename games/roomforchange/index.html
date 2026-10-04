@@ -30,20 +30,16 @@
 	</body>
 	
 	<script>
-		function handleMouseDown(evt) {
-		  evt.preventDefault();
-		  evt.stopPropagation();
-		  evt.target.style.cursor = 'default';
-		}
-		
-		function handleMouseUp(evt) {
-		  evt.preventDefault();
-		  evt.stopPropagation();
-		  evt.target.style.cursor = '';
-		}
-		
-		document.getElementById('embed-com.sturdyhelmetgames.roomforchange.GwtDefinition').addEventListener('mousedown', handleMouseDown, false);
-		document.getElementById('embed-com.sturdyhelmetgames.roomforchange.GwtDefinition').addEventListener('mouseup', handleMouseUp, false);
+		// Clicking the game must give this page keyboard focus, so don't cancel
+		// mousedown (that would keep focus wherever it was, e.g. an embedding page).
+		var embed = document.getElementById('embed-com.sturdyhelmetgames.roomforchange.GwtDefinition');
+		embed.addEventListener('mousedown', function(evt) {
+			window.focus();
+			evt.target.style.cursor = 'default';
+		}, false);
+		embed.addEventListener('mouseup', function(evt) {
+			evt.target.style.cursor = '';
+		}, false);
 
 		// Keep game keys from scrolling the page (or a page embedding this one).
 		window.addEventListener('keydown', function(evt) {

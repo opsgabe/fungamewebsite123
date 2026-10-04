@@ -4,8 +4,8 @@
 // with postMessage({ source, event }).
 (function () {
   const FRAG_TARGET = 10;
-  const STAGE1_URL = 'games/roomforchange/index.html';
-  const STAGE2_URL = 'games/bananabread/arena.html';
+  const STAGE1_URL = 'games/roomforchange/index.html?v=3';
+  const STAGE2_URL = 'games/bananabread/arena.html?v=3';
   const STAGE2_FILES = ['bb.wasm', 'bb.js', 'base.data', 'character.data', 'low.data'];
 
   const wrap = document.getElementById('raid-frame');
@@ -18,6 +18,7 @@
   const timeEl = document.getElementById('raid-time');
   const bestEl = document.getElementById('raid-best');
   const controlsEl = document.getElementById('raid-controls');
+  const focusVeil = document.getElementById('raid-focus');
   const steps = document.querySelectorAll('#raid-steps li');
   document.getElementById('raid-target').textContent = FRAG_TARGET;
 
@@ -98,6 +99,21 @@
     }
   }
 
+  // The games only get keys while their iframe has focus. Whenever focus is
+  // back on this page during play, cover the game with a "Click to play" veil;
+  // clicking it (a real user gesture) hands focus back to the game.
+  function syncFocusVeil() {
+    const playing = (stage === 'pyramid' || stage === 'arena') && frame && overlay.hidden;
+    focusVeil.hidden = !playing || document.activeElement === frame;
+  }
+
+  focusVeil.addEventListener('click', () => {
+    focusFrame();
+    syncFocusVeil();
+  });
+
+  setInterval(() => active && syncFocusVeil(), 250);
+
   function loadFrame(url, title) {
     removeFrame();
     frame = document.createElement('iframe');
@@ -105,11 +121,15 @@
     frame.title = title;
     frame.allow = 'fullscreen; autoplay';
     frame.setAttribute('allowfullscreen', '');
-    frame.addEventListener('load', focusFrame);
-    wrap.insertBefore(frame, overlay);
+    frame.addEventListener('load', () => {
+      focusFrame();
+      syncFocusVeil();
+    });
+    wrap.insertBefore(frame, focusVeil);
   }
 
   function removeFrame() {
+    focusVeil.hidden = true;
     if (!frame) return;
     frame.src = 'about:blank';
     frame.remove();
@@ -148,7 +168,7 @@
     overlay.hidden = true;
     loadFrame(STAGE1_URL, 'Stage 1: Room for Change');
     controlsEl.textContent =
-      'Stage 1 controls: Space to start · Arrow keys move · Z attacks and pulls levers · X drops a bomb. Click the game if keys stop working.';
+      'Stage 1 controls: Space to start · Arrow keys move · Z attacks and pulls levers · X drops a bomb.';
     prefetchArena();
   }
 
