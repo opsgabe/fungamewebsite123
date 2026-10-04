@@ -526,8 +526,9 @@ const CAIRNWALKER = {
     R(m, 'legR', -0.55 * s * a);
     m.anim.reach = approach(m.anim.reach || 0, m.state === 'chase' ? 1 : 0, dt * 2.5);
     const reach = smooth(m.anim.reach);
-    let armL = lerp(-0.4 * s * a, -1.1 + 0.1 * Math.sin(t * 3.1), reach);
-    let armR = lerp(0.4 * s * a, -1.1 + 0.1 * Math.sin(t * 3.1 + 1.3), reach);
+    // hunting: claws lifted toward the prey (kept short of the player's face)
+    let armL = lerp(-0.4 * s * a, -0.75 + 0.1 * Math.sin(t * 3.1), reach);
+    let armR = lerp(0.4 * s * a, -0.75 + 0.1 * Math.sin(t * 3.1 + 1.3), reach);
     if (m.attackT >= 0) {
       // raise both arms high, then slam them down
       const p = m.attackT;
@@ -1455,15 +1456,15 @@ export class MobManager {
         a.pushX -= nx * f; a.pushZ -= nz * f;
         b.pushX += nx * f; b.pushZ += nz * f;
       }
-      // the player pushes mobs out of the way (but never the other way round)
+      // the player shoves mobs out of their personal space (but never the other way round)
       const gap = this._gapToPlayer(a, c, 0);
-      if (gap === 0) {
+      if (gap < 0.05) {
         let dx = a.pos.x - c.px;
         let dz = a.pos.z - c.pz;
         const d = Math.hypot(dx, dz) || 1;
         dx /= d; dz /= d;
-        const min = (a.species.width + PLAYER_WIDTH) * 0.5;
-        const f = clamp((min - d) / min, 0.15, 1) * 4;
+        const min = (a.species.width + PLAYER_WIDTH) * 0.5 + 0.05;
+        const f = clamp((min - d) / min, 0.2, 1) * 7;
         a.pushX += dx * f;
         a.pushZ += dz * f;
       }
@@ -1786,7 +1787,7 @@ export class MobManager {
 
   _walkerCombat(m, dt, c, gap) {
     const sp = m.species;
-    if (gap < sp.attackRange * 0.6) m.speed = 0; // close enough: plant feet and swing
+    if (gap < sp.attackRange * 0.75) m.speed = 0; // close enough: plant feet and swing
     if (m.attackT < 0) {
       if (gap < sp.attackRange && m.attackCooldown <= 0 && m.seesPlayer) {
         m.attackT = 0;
@@ -1828,13 +1829,13 @@ export class MobManager {
       m.speed = 0;
       m.windup -= dt;
       if (m.windup <= 0) {
-        // launch so the arc lands on the player
+        // launch so the arc lands just in front of the player
         const vy = 7.6;
         const air = (2 * vy) / GRAVITY;
         const dx = c.px - m.pos.x;
         const dz = c.pz - m.pos.z;
         const d = Math.hypot(dx, dz) || 1;
-        const hsp = clamp(d / air, 4, 10);
+        const hsp = clamp((d - (sp.width / 2 + PLAYER_WIDTH / 2 + 0.1)) / air, 4, 10);
         m.vel.x = (dx / d) * hsp;
         m.vel.z = (dz / d) * hsp;
         m.vel.y = vy;
