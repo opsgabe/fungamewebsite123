@@ -1032,7 +1032,7 @@ export class MobManager {
     const oy = origin.y;
     const oz = origin.z;
     let best = null;
-    let bestT = reach;
+    let bestT = Number.isFinite(reach) && reach > 0 ? reach : 4.5;
     for (const m of this.mobs) {
       if (m.dead) continue;
       const sp = m.species;
