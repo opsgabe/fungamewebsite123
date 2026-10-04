@@ -316,7 +316,9 @@ export class Player {
     if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) this.teleport(x, y, z);
     if (Number.isFinite(obj.yaw)) this.yaw = obj.yaw;
     if (Number.isFinite(obj.pitch)) this.pitch = clampNum(obj.pitch, -PITCH_LIMIT, PITCH_LIMIT);
-    this.flying = !!obj.flying && this.mode === 'creative';
+    // Kept regardless of the current mode so setMode('creative') may come before or after this call;
+    // update() clears it again in survival.
+    this.flying = !!obj.flying;
     this._updateCamera(0);
   }
 
@@ -681,7 +683,7 @@ export class Player {
       this._stepDist += moved;
       if (this._stepDist >= STRIDE) {
         this._stepDist = 0;
-        this._playStep(this.sneaking ? 0.12 : 0.3);
+        this._playStep(this.sneaking ? 0.2 : 0.45);
       }
     } else if (inWater && !this.flying) {
       this._swimDist += moved + Math.abs(ry) * 0.5;

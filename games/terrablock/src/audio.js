@@ -26,7 +26,7 @@ const MATERIALS = {
     knock: { type: 'triangle', freq: 170, end: 120, dur: 0.06, gain: 0.35 } },
   wood: { noise: 'white', filter: 'bandpass', freq: 820, q: 2.6, dur: 0.08, grains: 1, spread: 0.02, gain: 0.7,
     knock: { type: 'sine', freq: 230, end: 150, dur: 0.1, gain: 0.6 } },
-  dirt: { noise: 'brown', filter: 'lowpass', freq: 1150, q: 0.8, dur: 0.1, grains: 2, spread: 0.03, gain: 1.15 },
+  dirt: { noise: 'brown', filter: 'lowpass', freq: 1150, q: 0.8, dur: 0.1, grains: 2, spread: 0.03, gain: 1.5 },
   grass: { noise: 'white', filter: 'bandpass', freq: 2500, q: 0.8, dur: 0.075, grains: 3, spread: 0.035, gain: 0.55,
     body: { freq: 700, gain: 0.5 } },
   sand: { noise: 'white', filter: 'highpass', freq: 3000, q: 0.7, dur: 0.12, grains: 3, spread: 0.03, gain: 0.42 },
@@ -34,8 +34,8 @@ const MATERIALS = {
   glass: { noise: 'white', filter: 'highpass', freq: 4200, q: 0.8, dur: 0.045, grains: 1, spread: 0.01, gain: 0.45,
     pings: [2950, 4050] },
   leaves: { noise: 'white', filter: 'highpass', freq: 2100, q: 0.6, dur: 0.12, grains: 3, spread: 0.045, gain: 0.42 },
-  snow: { noise: 'brown', filter: 'bandpass', freq: 1500, q: 0.6, dur: 0.12, grains: 2, spread: 0.05, gain: 0.9 },
-  wool: { noise: 'brown', filter: 'lowpass', freq: 620, q: 0.5, dur: 0.12, grains: 1, spread: 0.03, gain: 1.0 },
+  snow: { noise: 'brown', filter: 'bandpass', freq: 1500, q: 0.6, dur: 0.12, grains: 2, spread: 0.05, gain: 2.2 },
+  wool: { noise: 'brown', filter: 'lowpass', freq: 620, q: 0.5, dur: 0.12, grains: 1, spread: 0.03, gain: 2.0 },
 };
 
 export class Sounds {
@@ -300,7 +300,7 @@ const SYNTHS = {
   },
 
   step(s, out, t, material, p) {
-    return impact(s, out, t, material, p * 0.92, { durMul: 0.8, gain: 0.4, extraGrains: -1 });
+    return impact(s, out, t, material, p * 0.92, { durMul: 0.8, gain: 0.75, extraGrains: -1 });
   },
 
   place(s, out, t, material, p) {
@@ -358,23 +358,23 @@ const SYNTHS = {
   },
 
   click(s, out, t, _m, p) {
-    tone(s, out, t, { type: 'square', freq: 1500 * p, dur: 0.025, gain: 0.08, attack: 0.001, filter: 'highpass', filterFreq: 700 });
-    noise(s, out, t, { noise: 'white', filter: 'highpass', freq: 5000, q: 0.7, dur: 0.015, gain: 0.25, attack: 0.001 });
+    tone(s, out, t, { type: 'square', freq: 1500 * p, dur: 0.03, gain: 0.32, attack: 0.001, filter: 'highpass', filterFreq: 700 });
+    noise(s, out, t, { noise: 'white', filter: 'highpass', freq: 4500, q: 0.7, dur: 0.018, gain: 0.8, attack: 0.001 });
     return 0.05;
   },
 
   mobHurt(s, out, t, material, p) {
     if (material === 'monster') {
       // Gravelly snarl: low buzzing saw through a vocal formant, plus breath noise.
-      tone(s, out, t, { type: 'sawtooth', freq: 150 * p, end: 95 * p, dur: 0.3, gain: 0.45, filter: 'bandpass', filterFreq: 650, q: 3,
+      tone(s, out, t, { type: 'sawtooth', freq: 150 * p, end: 95 * p, dur: 0.3, gain: 1.0, filter: 'bandpass', filterFreq: 650, q: 3,
         vibrato: { rate: 28, depth: 14 * p } });
-      noise(s, out, t, { noise: 'brown', filter: 'lowpass', freq: 800, q: 0.7, dur: 0.22, gain: 0.45 });
+      noise(s, out, t, { noise: 'brown', filter: 'lowpass', freq: 800, q: 0.7, dur: 0.22, gain: 0.7 });
       return 0.34;
     }
     // Animal yelp: bright saw with a fast warble.
-    tone(s, out, t, { type: 'sawtooth', freq: 540 * p, end: 370 * p, dur: 0.22, gain: 0.32, filter: 'bandpass', filterFreq: 1400, q: 2.5,
+    tone(s, out, t, { type: 'sawtooth', freq: 540 * p, end: 370 * p, dur: 0.22, gain: 0.9, filter: 'bandpass', filterFreq: 1400, q: 2.5,
       vibrato: { rate: 11, depth: 22 * p } });
-    tone(s, out, t, { type: 'triangle', freq: 1080 * p, end: 740 * p, dur: 0.16, gain: 0.08 });
+    tone(s, out, t, { type: 'triangle', freq: 1080 * p, end: 740 * p, dur: 0.16, gain: 0.18 });
     return 0.26;
   },
 
@@ -385,7 +385,7 @@ const SYNTHS = {
       noise(s, out, t + 0.05, { noise: 'brown', filter: 'lowpass', freq: 1200, freqEnd: 200, q: 0.6, dur: 0.6, gain: 0.5, attack: 0.03 });
       return 0.8;
     }
-    tone(s, out, t, { type: 'sawtooth', freq: 480 * p, end: 150 * p, dur: 0.55, gain: 0.3, filter: 'bandpass', filterFreq: 1200, q: 2,
+    tone(s, out, t, { type: 'sawtooth', freq: 480 * p, end: 150 * p, dur: 0.55, gain: 0.7, filter: 'bandpass', filterFreq: 1200, q: 2,
       vibrato: { rate: 9, depth: 25 * p } });
     noise(s, out, t + 0.12, { noise: 'white', filter: 'bandpass', freq: 900, freqEnd: 300, q: 0.8, dur: 0.4, gain: 0.25, attack: 0.04 });
     return 0.6;
@@ -398,7 +398,7 @@ const SYNTHS = {
       noise(s, out, t, { noise: 'brown', filter: 'lowpass', freq: 500, q: 0.7, dur: 0.6, gain: 0.25, attack: 0.1 });
       return 0.7;
     }
-    tone(s, out, t, { type: 'sawtooth', freq: 360 * p, end: 330 * p, dur: 0.38, gain: 0.22, filter: 'bandpass', filterFreq: 1100, q: 2.2,
+    tone(s, out, t, { type: 'sawtooth', freq: 360 * p, end: 330 * p, dur: 0.38, gain: 0.5, filter: 'bandpass', filterFreq: 1100, q: 2.2,
       attack: 0.03, vibrato: { rate: 7, depth: 18 * p } });
     return 0.42;
   },

@@ -166,9 +166,11 @@ varying vec3 vDir;
 void main() {
   vec3 d = normalize(vDir);
   float h = d.y;
-  vec3 col = mix(uHorizon, uZenith, pow(clamp(h, 0.0, 1.0), 0.55));
+  // Ease-out gradient: finite slope at the horizon (no visible kink), mostly zenith colour by 30 degrees up.
+  float g = 1.0 - clamp(h, 0.0, 1.0);
+  vec3 col = mix(uHorizon, uZenith, 1.0 - g * g * g);
   // Below the horizon: stay at the horizon colour (it is also the fog colour), darkening slightly far down.
-  col = mix(col, uHorizon * 0.82, smoothstep(0.0, -0.45, h));
+  col = mix(col, uHorizon * 0.82, smoothstep(0.0, 0.45, -h));
   // Twilight glow hugging the horizon around the sun.
   float s = max(dot(d, uSunDir), 0.0);
   float glow = uGlowAmt * (pow(s, 5.0) * 0.85 + pow(s, 32.0) * 0.4) * (1.0 - smoothstep(0.0, 0.55, abs(h - 0.04)));
@@ -251,13 +253,26 @@ function cloudPattern(grid, seed) {
       return a + (b - a) * sz;
     };
   };
-  const o1 = octave(8), o2 = octave(16), o3 = octave(24);
-  const cells = new Uint8Array(grid * grid);
+  // Periods are whole lattice cells per tile, so the pattern wraps seamlessly; the small offsets keep the
+  // octaves' lattice lines from lining up (which reads as straight streaks). About 30% coverage.
+  const PERIODS = [9, 18, 36];
+  const WEIGHTS = [0.5, 0.32, 0.18];
+  const octaves = PERIODS.map(octave);
+  const raw = new Uint8Array(grid * grid);
   for (let z = 0; z < grid; z++) {
     for (let x = 0; x < grid; x++) {
       const u = x / grid, v = z / grid;
-      const n = o1(u * 8, v * 8) * 0.55 + o2(u * 16, v * 16) * 0.3 + o3(u * 24, v * 24) * 0.15;
-      cells[x + z * grid] = n > 0.56 ? 1 : 0;
+      let n = 0;
+      for (let i = 0; i < octaves.length; i++) n += octaves[i](u * PERIODS[i] + 0.37 * i, v * PERIODS[i] + 0.61 * i) * WEIGHTS[i];
+      raw[x + z * grid] = n > 0.57 ? 1 : 0;
+    }
+  }
+  // Drop lone cells: they read as noise rather than clouds.
+  const cells = new Uint8Array(grid * grid);
+  const at = (x, z) => raw[((x + grid) % grid) + ((z + grid) % grid) * grid];
+  for (let z = 0; z < grid; z++) {
+    for (let x = 0; x < grid; x++) {
+      if (at(x, z) && (at(x + 1, z) || at(x - 1, z) || at(x, z + 1) || at(x, z - 1))) cells[x + z * grid] = 1;
     }
   }
   return cells;
@@ -540,10 +555,11 @@ export class Renderer {
     this._daylight = day;
     this._light = MIN_LIGHT + (1 - MIN_LIGHT) * day;
     // Twilight glow peaks while the sun crosses the horizon and lingers a little after sunset.
-    this._glow = Math.exp(-((e + 0.02) / 0.2) ** 2);
+    this._glow = Math.exp(-(((e + 0.02) / 0.2) ** 2));
 
     this._zenith.copy(NIGHT_ZENITH).lerp(DAY_ZENITH, day);
-    this._horizon.copy(NIGHT_HORIZON).lerp(DAY_HORIZON, day).lerp(TWILIGHT_HORIZON, this._glow * 0.35 * Math.max(0.25, day));
+    // A faint rosy cast around the whole horizon at dawn/dusk; the strong glow is directional (sky shader).
+    this._horizon.copy(NIGHT_HORIZON).lerp(DAY_HORIZON, day).lerp(TWILIGHT_HORIZON, this._glow * 0.1);
 
     const u = this._skyUniforms;
     u.uZenith.value.copy(this._zenith);
@@ -560,9 +576,11 @@ export class Renderer {
     this.sun.material.opacity = smoothstep(-0.14, 0.02, e);
     this.moon.material.opacity = smoothstep(-0.14, 0.02, -e) * (0.55 + 0.45 * (1 - day));
 
-    // Cloud colour: white by day, dim blue-grey at night, warm at twilight.
-    const cl = 0.17 + 0.83 * day;
-    const warm = this._glow * 0.6 * Math.max(0.3, day);
+    // Cloud colour: white by day, dim blue-grey at night; clouds stay lit a little longer than the ground
+    // and turn peach at dawn and dusk.
+    const cloudDay = smoothstep(-0.3, 0.22, e);
+    const cl = 0.17 + 0.83 * cloudDay;
+    const warm = this._glow * 0.85 * Math.max(0.3, cloudDay);
     _tmpColor.setRGB(
       cl * (0.92 + 0.08 * day),
       cl * (0.94 + 0.06 * day) * (1 - 0.25 * warm),

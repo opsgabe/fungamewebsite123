@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terrablock</title>
+    <meta
+      name="description"
+      content="Terrablock: a blocky voxel sandbox for the browser. Explore generated worlds, mine, craft, build and survive the night."
+    />
+    <meta name="theme-color" content="#0a0d14" />
+    <meta name="color-scheme" content="dark" />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Cpath fill='%237b4f32' d='M2 5h12v9H2z'/%3E%3Cpath fill='%239a6744' d='M2 8h3v2H2zm6 1h3v2H8zM4 11h3v2H4zm7 1h3v2h-3z'/%3E%3Cpath fill='%235fb83a' d='M2 2h12v4H2z'/%3E%3Cpath fill='%239be86b' d='M2 2h12v1H2zM4 6h2v1H4zm6 0h1v2h-1z'/%3E%3Cpath fill='none' stroke='%230a0d14' d='M1.5 1.5h13v13h-13z'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body>
+    <canvas id="game" aria-label="Terrablock game view" tabindex="-1"></canvas>
+    <div id="ui-root">
+      <div class="tb-boot" data-boot>Loading Terrablock&hellip;</div>
+    </div>
+    <noscript>
+      <p style="position: fixed; inset: 0; display: grid; place-items: center; margin: 0; font: 16px/1.4 monospace; color: #f1f4fa">
+        Terrablock needs JavaScript to run.
+      </p>
+    </noscript>
+    <script>
+      // Tell the player something useful if the game modules cannot load (old browser, broken deploy).
+      window.__tbBootFail = function (msg) {
+        var el = document.querySelector('[data-boot]');
+        if (el) el.textContent = msg;
+      };
+      // An error before the UI has replaced the boot message means the game could not start.
+      window.addEventListener('error', function (e) {
+        if (document.querySelector('[data-boot]'))
+          window.__tbBootFail('Terrablock could not start: ' + ((e && e.message) || 'unknown error'));
+      });
+      setTimeout(function () {
+        if (document.querySelector('[data-boot]'))
+          window.__tbBootFail('Terrablock could not start. Please use an up-to-date browser with WebGL enabled.');
+      }, 20000);
+    </script>
+    <script
+      type="module"
+      src="src/main.js"
+      onerror="window.__tbBootFail && window.__tbBootFail('Terrablock failed to load its game files. Please reload the page.')"
+    ></script>
+  </body>
+</html>
