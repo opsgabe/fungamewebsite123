@@ -1567,7 +1567,8 @@ export class MobManager {
     m.dirZ = Math.cos(ang);
   }
 
-  // How far the ground drops one step ahead (0 = level or higher, 6 = cliff/void) and whether water lies ahead.
+  // How many blocks the ground drops one step ahead (0 = level or a step up, 6 = cliff/void) and whether the
+  // next footing is water.
   _probeAhead(m, dirX, dirZ) {
     const hw = m.species.width / 2;
     const ax = Math.floor(m.pos.x + dirX * (hw + 0.45));
@@ -1575,10 +1576,10 @@ export class MobManager {
     const fy = Math.floor(m.pos.y + 0.01);
     let water = false;
     let drop = 6;
-    for (let k = 0; k <= 5; k++) {
+    for (let k = 0; k <= 6; k++) {
       const id = this._block(ax, fy - k, az);
-      if (id === B.WATER) { water = true; drop = k; break; }
-      if (id < 0 || idIsSolid(id)) { drop = k; break; }
+      if (id === B.WATER) { water = true; drop = Math.max(0, k - 1); break; }
+      if (id < 0 || idIsSolid(id)) { drop = Math.max(0, k - 1); break; }
     }
     return { drop, water };
   }
