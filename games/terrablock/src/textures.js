@@ -455,10 +455,20 @@ paint(TILE.BRICKS, (t, r) => {
   }
 });
 
+// Bedrock: a jumble of fused rock lumps in strongly contrasting greys with near-black seams.
 paint(TILE.BEDROCK, (t, r) => {
-  const n = noise(r, [[4, 4, 0.45], [2, 2, 0.35], [1, 1, 0.2]]);
-  t.fill((x, y) => pick(BEDROCK_RAMP, n[y * N + x]));
-  for (let k = 0; k < 6; k++) t.set((r() * N) | 0, (r() * N) | 0, BEDROCK_RAMP[5]);
+  const v = voronoi(r, 12);
+  const n = noise(r, [[2, 2, 0.5], [1, 1, 0.5]]);
+  const LEVELS = [1, 1, 2, 2, 3, 4]; // mostly dark lumps, a few pale ones
+  const lvl = [];
+  for (let i = 0; i < v.count; i++) lvl.push(LEVELS[(r() * LEVELS.length) | 0]);
+  t.fill((x, y) => {
+    const k = y * N + x;
+    if (v.edge[k]) return BEDROCK_RAMP[0];
+    const light = -(v.dx[k] + v.dy[k]) * 0.22; // each lump lit from the top-left
+    return BEDROCK_RAMP[clampi(Math.round(lvl[v.id[k]] + light + (n[k] - 0.5) * 1.3), 0, 5)];
+  });
+  for (let k = 0; k < 5; k++) t.set((r() * N) | 0, (r() * N) | 0, BEDROCK_RAMP[0]);
 });
 
 paint(TILE.OBSIDIAN, (t, r) => {
@@ -1083,17 +1093,21 @@ function paintWool(t, r, base) {
   const white = [255, 255, 255, 255];
   const ramp = [mix(c, black, 0.3), mix(c, black, 0.18), mix(c, black, 0.08), c, mix(c, white, 0.1), mix(c, white, 0.2)];
   const n = noise(r, [[4, 4, 0.35], [2, 2, 0.25], [1, 1, 0.4]]);
-  // Knit stitches: columns of small chevrons, light on the upper arms.
+  // Knit stitches: each 4x4 cell is a "V" of two slanted loops (left loop leans right, right loop
+  // leans left), lit on top and shadowed underneath. Neighbouring stitch columns are offset by
+  // two rows so the fabric reads as interlocking loops rather than stripes.
   const stitch = [
-    [1, 0, 0, 1],
-    [0, 1, 1, 0],
-    [0, 0, 0, 0],
-    [-1, 0, 0, -1],
+    [2, 1, 1, 2],
+    [1, 2, 2, 1],
+    [-1, 1, 1, -1],
+    [-2, -1, -1, -2],
   ];
   t.fill((x, y) => {
     const s = stitch[(y + ((x >> 2) & 1) * 2) & 3][x & 3];
-    return ramp[clampi(Math.round(2.4 + (n[y * N + x] - 0.5) * 2.2 + s * 0.9), 0, 5)];
+    return ramp[clampi(Math.round(2.5 + (n[y * N + x] - 0.5) * 1.6 + s * 0.75), 0, 5)];
   });
+  // Stray fibres.
+  for (let k = 0; k < 6; k++) t.set((r() * N) | 0, (r() * N) | 0, r() < 0.5 ? ramp[5] : ramp[0]);
 }
 
 paint(TILE.WOOL_WHITE, (t, r) => paintWool(t, r, '#e3e6e6'));
@@ -1306,7 +1320,6 @@ paint(TILE.FLOWER_RED, (t) => {
       c: hex('#5a2a0e'),
       s: hex('#3b7a25'),
       l: hex('#4f962f'),
-      L_: null,
     },
   );
   // Leaf highlights.
@@ -1440,24 +1453,37 @@ const TOOL_MATERIALS = {
   diamond: { H: hex('#c8fff8'), M: hex('#4ee2d3'), D: hex('#1c9a91') },
 };
 
-const PICKAXE = [
+// Mirror every pixel above-left of the anti-diagonal (x + y < 15) onto the other side, so a
+// head drawn once comes out symmetric about a handle running bottom-left to top-right.
+function mirrorAntiDiagonal(rows) {
+  const g = rows.map((row) => row.split(''));
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const c = rows[y][x];
+    if (x + y >= 15 || c === '.') continue;
+    if (g[15 - x][15 - y] === '.') g[15 - x][15 - y] = c;
+  }
+  return g.map((row) => row.join(''));
+}
+
+// Only the upper-left arm of the head is drawn; mirrorAntiDiagonal adds the lower-right arm.
+const PICKAXE = mirrorAntiDiagonal([
   '................',
-  '.....HHHHH......',
-  '...HHMMMMMHH....',
-  '..HMMDDDDDMMH...',
-  '..MD......DMMH..',
-  '..D.......DDMH..',
-  '.........wk.DMH.',
-  '........hk..DMH.',
-  '.......wk...DMH.',
-  '......hk....DMH.',
-  '.....wk.....DMH.',
-  '....hk......MH..',
-  '...wk......DMH..',
-  '..hk......DMH...',
+  '......HHHHHH....',
+  '....HHMMMMMMMH..',
+  '...HMMDDDDMMM...',
+  '..HMD.....DD....',
+  '.HMD......h.....',
+  '.MD......wk.....',
+  '.D......hk......',
+  '.......wk.......',
+  '......hk........',
+  '.....wk.........',
+  '....hk..........',
+  '...wk...........',
+  '..hk............',
   '.wk.............',
   '................',
-];
+]);
 
 const AXE = [
   '................',
@@ -1590,6 +1616,8 @@ paintItem(257, (t) => {
   outline(t, 0.6);
 });
 
+// A cast bar seen from the front-right and above: slanted top (T) with a lit back/left edge (L),
+// front face (F, lit top row l, shadowed base f) and a darker right end (E).
 function paintIngot(t, c) {
   stamp(
     t,
@@ -1599,13 +1627,13 @@ function paintIngot(t, c) {
       '................',
       '................',
       '................',
-      '.....TTTTTT.....',
-      '....TLLTTTTT....',
-      '...TLTTTTTTTT...',
-      '..EFFFFFFFFFFS..',
-      '..EFFFFFFFFFFS..',
-      '..EFFFFFFFFFFS..',
-      '..SSSSSSSSSSSS..',
+      '......LLLLLLLL..',
+      '.....LTTsTTTTE..',
+      '....LTTsTTTTEE..',
+      '...LTTTTTTTEEE..',
+      '...llllllllEE...',
+      '...FFFFFFFFE....',
+      '...ffffffff.....',
       '................',
       '................',
       '................',
@@ -1615,8 +1643,12 @@ function paintIngot(t, c) {
   );
   outline(t, 0.72);
 }
-paintItem(258, (t) => paintIngot(t, { L: hex('#ffffff'), T: hex('#e4e5e9'), E: hex('#d6d7dc'), F: hex('#bfc0c6'), S: hex('#8a8c93') }));
-paintItem(259, (t) => paintIngot(t, { L: hex('#fff7c4'), T: hex('#fbdf68'), E: hex('#f2cc45'), F: hex('#e2b22a'), S: hex('#a97b0c') }));
+paintItem(258, (t) =>
+  paintIngot(t, { L: hex('#ffffff'), s: hex('#ffffff'), T: hex('#dfe0e5'), l: hex('#cfd0d6'), F: hex('#b9bbc2'), f: hex('#999ba3'), E: hex('#8d8f97') }),
+);
+paintItem(259, (t) =>
+  paintIngot(t, { L: hex('#fff6c2'), s: hex('#fffbe0'), T: hex('#f9d851'), l: hex('#f0c43a'), F: hex('#e0ad25'), f: hex('#c18f12'), E: hex('#a8780a') }),
+);
 
 paintItem(260, (t) => {
   stamp(
@@ -1662,34 +1694,50 @@ paintItem(277, (t) => {
   outline(t, 0.6);
 });
 
-function paintMeat(t, cooked) {
-  const meat = cooked ? pal('#4c240e', '#6a3416', '#87461f', '#a35d2c', '#bd7a42') : pal('#7d1f2a', '#a3303c', '#c4444f', '#dc6670', '#ef9198');
-  const fat = cooked ? pal('#c99a52', '#e5bf78') : pal('#e3d2c8', '#fbf1ea');
-  for (let y = 2; y < 15; y++) for (let x = 1; x < 15; x++) {
-    // Slightly tilted, lumpy steak.
-    const dx = x + 0.5 - 8;
-    const dy = y + 0.5 - 8.5;
-    const u = (dx * 0.94 + dy * 0.34) / 6.6;
-    const v = (-dx * 0.34 + dy * 0.94) / 4.9;
-    const d = u * u + v * v + Math.sin(x * 1.7 + y) * 0.04;
+// A meaty haunch on a bone: tilted oval body (lit top-left) with the bone poking out bottom-left.
+// Raw meat is pink-red with a pale fat rim and marbling; cooked meat is browned with a dark crust.
+function paintMeat(t, r, cooked) {
+  const meat = cooked
+    ? pal('#5a2a10', '#74391a', '#8f4c24', '#aa632f', '#c27c40', '#d89a5a')
+    : pal('#7a1b26', '#992532', '#b73641', '#cf4d58', '#e26d75', '#f1939a');
+  const rim = cooked ? hex('#3a1a09') : hex('#ecd9d2');
+  const ca = Math.cos(-0.6);
+  const sa = Math.sin(-0.6);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const dx = x + 0.5 - 9.4;
+    const dy = y + 0.5 - 6.6;
+    const u = (dx * ca - dy * sa) / 5.9;
+    const v = (dx * sa + dy * ca) / 4.6;
+    const d = u * u + v * v;
     if (d > 1) continue;
-    let c;
-    if (d > 0.62 && v < 0.15) c = d > 0.8 ? fat[0] : fat[1]; // fat cap along the top edge
-    else c = pick(meat, 0.55 - (u + v) * 0.35 + ((x * 7 + y * 3) % 5) * 0.03);
+    const light = -(dx * 0.55 + dy * 0.8) / 6; // ~ -1..1, brighter toward the top-left
+    let c = pick(meat, 0.5 + light * 0.42 + (r() - 0.5) * 0.18);
+    // Outer layer: a fat rim on raw meat (lower-right side), a crust on cooked meat (all round).
+    if (d > 0.72 && (cooked || dx + dy > -1)) c = cooked ? mix(c, rim, 0.4) : rim;
     t.set(x, y, c);
   }
   if (cooked) {
-    // Grill marks.
-    for (const o of [0, 4, 8]) line(4 + o, 12, 7 + o, 6, (x, y) => t.alpha(x, y) && t.set(x, y, hex('#2e1407')));
+    // Seared grill marks across the body.
+    const sear = hex('#2c1206');
+    for (const o of [0, 4]) line(7 + o, 10, 9 + o, 4, (x, y) => t.alpha(x, y) && t.set(x, y, sear));
+    t.set(7, 4, hex('#e2a86a'));
+    t.set(8, 3, hex('#e2a86a'));
   } else {
-    // Marbling and a round bone.
-    for (const [x, y] of [[5, 9], [6, 9], [9, 11], [10, 11], [11, 8]]) if (t.alpha(x, y)) t.set(x, y, hex('#f0b4b8'));
-    stamp(t, ['.ww.', 'wbbw', 'wbbw', '.ww.'], { w: hex('#f4efe4'), b: hex('#c9bca4') }, 8, 6);
+    const marble = hex('#f5c3c6');
+    for (const [x, y] of [[7, 5], [8, 5], [10, 7], [11, 7], [12, 6], [8, 8], [9, 9]]) if (t.alpha(x, y)) t.set(x, y, marble);
   }
+  // Bone: shaft with a lit upper edge, ending in a two-lobed knuckle.
+  const bone = hex('#f3ecdc');
+  const boneShade = hex('#c4b79c');
+  for (let i = 0; i < 4; i++) {
+    t.put(5 - i, 10 + i, bone);
+    t.put(5 - i, 11 + i, boneShade);
+  }
+  stamp(t, ['.W..', 'WWs.', '.sW.', '..s.'], { W: bone, s: boneShade }, 0, 12);
   outline(t, 0.65);
 }
-paintItem(278, (t) => paintMeat(t, false));
-paintItem(279, (t) => paintMeat(t, true));
+paintItem(278, (t, r) => paintMeat(t, r, false));
+paintItem(279, (t, r) => paintMeat(t, r, true));
 
 // ---------------------------------------------------------------------------------------------
 // Atlas assembly.
@@ -1759,6 +1807,31 @@ function texel(px, tile, u, v) {
   return (((Math.floor(tile / ATLAS_COLS) * N + ty) * ATLAS_W + (tile % ATLAS_COLS) * N + tx) << 2);
 }
 
+// Average colour of a tile's opaque pixels, darkened: fills the see-through gaps of foliage on
+// cube icons (in the world you would see more leaves behind them, not the inventory slot).
+const holeColorCache = new Map();
+function holeColor(px, tile) {
+  let c = holeColorCache.get(tile);
+  if (!c) {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    let n = 0;
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const i = texel(px, tile, (x + 0.5) / N, (y + 0.5) / N);
+      if (px[i + 3] < 128) continue;
+      r += px[i];
+      g += px[i + 1];
+      b += px[i + 2];
+      n++;
+    }
+    const k = n ? 0.5 / n : 0;
+    c = [r * k, g * k, b * k];
+    holeColorCache.set(tile, c);
+  }
+  return c;
+}
+
 // Isometric cube: top face plus the front (left) and side (right) faces, shaded like the world.
 function renderCubeIcon(def, s) {
   const px = getAtlasPixels();
@@ -1773,6 +1846,7 @@ function renderCubeIcon(def, s) {
   // Cactus faces are inset in the world; crop the transparent rim so the icon reads solid.
   const inset = def.id === 20 ? 1 / 16 : 0;
   const crop = (u) => inset + u * (1 - 2 * inset);
+  const fillHoles = def.sound === 'leaves';
   const ss = s < 24 ? 4 : s < 40 ? 2 : 1; // supersample small icons
   for (let py = 0; py < s; py++) for (let qx = 0; qx < s; qx++) {
     let r = 0;
@@ -1809,7 +1883,15 @@ function renderCubeIcon(def, s) {
       if (v < 0 || v >= 1) continue;
       const i = texel(px, tile, crop(u), crop(v));
       const al = px[i + 3] / 255;
-      if (al === 0) continue;
+      if (al === 0) {
+        if (!fillHoles) continue;
+        const h = holeColor(px, tile);
+        r += h[0] * shade;
+        g += h[1] * shade;
+        b += h[2] * shade;
+        a += 1;
+        continue;
+      }
       r += px[i] * shade * al;
       g += px[i + 1] * shade * al;
       b += px[i + 2] * shade * al;

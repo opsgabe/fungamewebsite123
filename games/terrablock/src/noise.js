@@ -89,22 +89,27 @@ export function rand3(seed, x, y, z) {
 // 3D gradients: 64 unit vectors spread evenly over the sphere (Fibonacci lattice). The classic 12
 // cube-edge gradients make the zero set of 3D simplex noise contain long straight 45-degree segments,
 // which show up as unnaturally straight cave tunnels; well-spread directions avoid that.
+// Math.cos/sin are not required to be correctly rounded, so table entries are quantised to 1e-9:
+// every JS engine then builds bit-identical tables and a seed makes the same world everywhere.
+function q9(v) {
+  return Math.round(v * 1e9) / 1e9;
+}
 const GRAD3 = new Float64Array(64 * 3);
 for (let i = 0; i < 64; i++) {
   const y = 1 - ((i + 0.5) / 64) * 2;
   const r = Math.sqrt(1 - y * y);
   const phi = i * Math.PI * (3 - Math.sqrt(5)) + 0.3;
-  GRAD3[i * 3] = Math.cos(phi) * r;
+  GRAD3[i * 3] = q9(Math.cos(phi) * r);
   GRAD3[i * 3 + 1] = y;
-  GRAD3[i * 3 + 2] = Math.sin(phi) * r;
+  GRAD3[i * 3 + 2] = q9(Math.sin(phi) * r);
 }
 
 // 2D gradients: 16 directions evenly spread around the circle (less axis bias than the 12 3D ones).
 const GRAD2 = new Float64Array(32);
 for (let i = 0; i < 16; i++) {
   const a = (i / 16) * Math.PI * 2 + Math.PI / 16;
-  GRAD2[i * 2] = Math.cos(a);
-  GRAD2[i * 2 + 1] = Math.sin(a);
+  GRAD2[i * 2] = q9(Math.cos(a));
+  GRAD2[i * 2 + 1] = q9(Math.sin(a));
 }
 
 function buildPerm(seed) {

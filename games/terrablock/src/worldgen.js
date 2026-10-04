@@ -192,9 +192,13 @@ class Generator {
     const wz = z + fbm2(this.nWarpZ, x * (1 / 240), z * (1 / 240), 2) * 48;
 
     let c = fbm2(this.nCont, wx * (1 / 1000), wz * (1 / 1000), 4) * 1.25 + 0.27;
-    // Nudge towards land around the origin so spawn is never far out at sea.
+    // Nudge towards land around the origin so spawn is never far out at sea. A polynomial bump
+    // (not Math.exp) keeps the result bit-identical across JS engines.
     const r2 = x * x + z * z;
-    if (r2 < 4e6) c += 0.32 * Math.exp(-r2 * (1 / (2 * 360 * 360)));
+    if (r2 < 1e6) {
+      const f = 1 - r2 * 1e-6;
+      c += 0.32 * f * f * f;
+    }
 
     // Climate (with a little high-frequency jitter so biome borders aren't perfectly smooth curves).
     const jit = this.nJit(x * (1 / 14), z * (1 / 14));
@@ -1117,7 +1121,8 @@ export function terrainHeightAt(x, z, seed) {
 
 /**
  * Spawn point: feet position {x, y, z} (block centre) on dry, solid ground near the origin with two air
- * blocks above. Prefers grassy biomes, searching outward in rings; falls back to any dry land.
+ * blocks above. Searches outward in square rings: first for flat, open grass in a temperate/cold biome,
+ * then for any dry standable block in any land biome.
  */
 export function findSpawn(seed) {
   const g = getGenerator(seed);
@@ -1132,40 +1137,49 @@ export function findSpawn(seed) {
     }
     return c;
   };
+  // Topmost non-air block y of world column (x, z), from generated chunk data.
+  const topY = (x, z) => {
+    const data = getChunk(floorDiv(x, CS), floorDiv(z, CS));
+    const ci = (x - floorDiv(x, CS) * CS) + (z - floorDiv(z, CS) * CS) * CS;
+    let y = MAX_Y;
+    while (y > 0 && data[ci + y * CA] === AIR) y--;
+    return { data, ci, y };
+  };
   const col = { h: 0, biome: 0, T: 0, Hu: 0, mh: 0, c: 0, valley: 0 };
   const GOOD = new Set([PLAINS, FOREST, BIRCH_FOREST, TAIGA, SNOWY]);
   const OK = new Set([PLAINS, FOREST, BIRCH_FOREST, TAIGA, SNOWY, DESERT, BEACH, MOUNTAINS]);
+  const GRASSY = new Set([GRASS, SNOWY_GRASS]);
   const STANDABLE = new Set([GRASS, SNOWY_GRASS, DIRT, SAND, STONE, GRAVEL, SNOW, SANDSTONE, CLAY]);
 
-  const tryColumn = (x, z, accept) => {
+  const tryColumn = (x, z, strict) => {
     g.computeColumn(x, z, col);
-    if (col.h <= SEA_LEVEL || !accept.has(col.biome)) return null;
-    const data = getChunk(Math.floor(x / CS), Math.floor(z / CS));
-    const lx = ((x % CS) + CS) % CS;
-    const lz = ((z % CS) + CS) % CS;
-    // Topmost non-air block of the column.
-    let y = MAX_Y - 2;
-    while (y > 0 && data[lx + lz * CS + y * CA] === AIR) y--;
-    const b = data[lx + lz * CS + y * CA];
-    if (!STANDABLE.has(b) || y <= SEA_LEVEL) return null;
-    if (data[lx + lz * CS + (y + 1) * CA] !== AIR || data[lx + lz * CS + (y + 2) * CA] !== AIR) return null;
+    if (col.h <= SEA_LEVEL + (strict ? 1 : 0) || !(strict ? GOOD : OK).has(col.biome)) return null;
+    const { data, ci, y } = topY(x, z);
+    if (y <= SEA_LEVEL || y >= MAX_Y - 2) return null;
+    const b = data[ci + y * CA];
+    if (!(strict ? GRASSY : STANDABLE).has(b)) return null;
+    if (data[ci + (y + 1) * CA] !== AIR || data[ci + (y + 2) * CA] !== AIR) return null;
+    if (strict) {
+      // Level ground: all four side neighbours are within one block (no cliff edge, tree or pit).
+      for (let d = 0; d < 4; d++) {
+        const n = topY(x + (d === 0 ? 1 : d === 1 ? -1 : 0), z + (d === 2 ? 1 : d === 3 ? -1 : 0));
+        if (Math.abs(n.y - y) > 1 || n.data[n.ci + n.y * CA] === WATER) return null;
+      }
+    }
     return { x: x + 0.5, y: y + 1, z: z + 0.5 };
   };
 
   // Square rings outward from the origin, sampling every 4 blocks.
-  for (const accept of [GOOD, OK]) {
+  for (const strict of [true, false]) {
     for (let r = 0; r <= 1024; r += 4) {
       if (r === 0) {
-        const p = tryColumn(0, 0, accept);
+        const p = tryColumn(0, 0, strict);
         if (p) return p;
         continue;
       }
       for (let i = -r; i < r; i += 4) {
-        const cands = [[i, -r], [r, i], [-i, r], [-r, -i]];
-        for (const [x, z] of cands) {
-          const p = tryColumn(x, z, accept);
-          if (p) return p;
-        }
+        const p = tryColumn(i, -r, strict) || tryColumn(r, i, strict) || tryColumn(-i, r, strict) || tryColumn(-r, -i, strict);
+        if (p) return p;
       }
     }
   }

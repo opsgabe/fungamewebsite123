@@ -188,7 +188,7 @@ const WOOL = { hardness: 0.8, sound: 'wool' };
 const METAL = { hardness: 5, tool: 'pickaxe', sound: 'stone' };
 
 // `color` is the average colour of each block's side texture (top for flat-topped ground blocks),
-// measured from the generated atlas; used for particles and debug views.
+// measured from the generated atlas (flowers use their petal colour); used for particles and debug views.
 define(B.AIR, 'Air', {
   solid: false, opaque: false, renderLayer: 'none', shape: 'none', textures: tex(TILE.STONE),
   hardness: 0, drop: null, sound: 'stone', replaceable: true, color: 'rgba(0,0,0,0)',
@@ -198,20 +198,20 @@ define(B.GRASS, 'Grass Block', {
   textures: tex(TILE.GRASS_TOP, TILE.GRASS_SIDE, TILE.DIRT), hardness: 0.6, tool: 'shovel', drop: B.DIRT, sound: 'grass', color: '#5a9a35',
 });
 define(B.DIRT, 'Dirt', { textures: tex(TILE.DIRT), hardness: 0.5, tool: 'shovel', sound: 'dirt', color: '#7a5638' });
-define(B.COBBLESTONE, 'Cobblestone', { textures: tex(TILE.COBBLESTONE), hardness: 2, tool: 'pickaxe', minTier: 0, color: '#77777a' });
-define(B.PLANKS, 'Wooden Planks', { textures: tex(TILE.PLANKS), hardness: 2, tool: 'axe', sound: 'wood', color: '#a5804c' });
-define(B.BEDROCK, 'Bedrock', { textures: tex(TILE.BEDROCK), hardness: -1, drop: null, color: '#48484b' });
+define(B.COBBLESTONE, 'Cobblestone', { textures: tex(TILE.COBBLESTONE), hardness: 2, tool: 'pickaxe', minTier: 0, color: '#67676b' });
+define(B.PLANKS, 'Wooden Planks', { textures: tex(TILE.PLANKS), hardness: 2, tool: 'axe', sound: 'wood', color: '#88663a' });
+define(B.BEDROCK, 'Bedrock', { textures: tex(TILE.BEDROCK), hardness: -1, drop: null, color: '#2f2f31' });
 define(B.WATER, 'Water', {
   solid: false, opaque: false, renderLayer: 'water', textures: tex(TILE.WATER), hardness: -1, drop: null,
   sound: 'grass', liquid: true, replaceable: true, color: '#2f63be',
 });
 define(B.SAND, 'Sand', { textures: tex(TILE.SAND), hardness: 0.5, tool: 'shovel', sound: 'sand', gravity: true, color: '#dccb95' });
-define(B.GRAVEL, 'Gravel', { textures: tex(TILE.GRAVEL), hardness: 0.6, tool: 'shovel', sound: 'gravel', gravity: true, color: '#827c76' });
+define(B.GRAVEL, 'Gravel', { textures: tex(TILE.GRAVEL), hardness: 0.6, tool: 'shovel', sound: 'gravel', gravity: true, color: '#6e6964' });
 define(B.GOLD_ORE, 'Gold Ore', { ...ORE, textures: tex(TILE.GOLD_ORE), minTier: 2, color: '#8b8571' });
 define(B.IRON_ORE, 'Iron Ore', { ...ORE, textures: tex(TILE.IRON_ORE), minTier: 1, color: '#8b827c' });
 define(B.COAL_ORE, 'Coal Ore', { ...ORE, textures: tex(TILE.COAL_ORE), minTier: 0, drop: ITEM_COAL, color: '#6b6b6e' });
 define(B.LOG, 'Oak Log', { textures: tex(TILE.LOG_TOP, TILE.LOG_SIDE), hardness: 2, tool: 'axe', sound: 'wood', color: '#5c4228' });
-define(B.LEAVES, 'Oak Leaves', { ...LEAF, textures: tex(TILE.LEAVES), color: '#38812a' });
+define(B.LEAVES, 'Oak Leaves', { ...LEAF, textures: tex(TILE.LEAVES), color: '#2c6e21' });
 define(B.GLASS, 'Glass', {
   opaque: false, renderLayer: 'cutout', textures: tex(TILE.GLASS), hardness: 0.3, drop: null, sound: 'glass', color: '#c9e6ec',
 });
@@ -233,30 +233,30 @@ define(B.CLAY, 'Clay', { textures: tex(TILE.CLAY), hardness: 0.6, tool: 'shovel'
 define(B.DIAMOND_ORE, 'Diamond Ore', { ...ORE, textures: tex(TILE.DIAMOND_ORE), minTier: 2, drop: ITEM_DIAMOND, color: '#76898b' });
 define(B.CRAFTING_TABLE, 'Crafting Table', {
   textures: tex(TILE.CRAFTING_TABLE_TOP, TILE.CRAFTING_TABLE_SIDE, TILE.PLANKS, TILE.CRAFTING_TABLE_FRONT),
-  hardness: 2.5, tool: 'axe', sound: 'wood', color: '#8a6539',
+  hardness: 2.5, tool: 'axe', sound: 'wood', color: '#6f5633',
 });
 define(B.FURNACE, 'Furnace', {
   textures: tex(TILE.FURNACE_TOP, TILE.FURNACE_SIDE, TILE.FURNACE_TOP, TILE.FURNACE_FRONT),
   hardness: 3.5, tool: 'pickaxe', minTier: 0, color: '#77777a',
 });
-define(B.BRICKS, 'Bricks', { textures: tex(TILE.BRICKS), hardness: 2, tool: 'pickaxe', minTier: 0, color: '#9c4c3c' });
+define(B.BRICKS, 'Bricks', { textures: tex(TILE.BRICKS), hardness: 2, tool: 'pickaxe', minTier: 0, color: '#a16453' });
 define(B.TALL_GRASS, 'Tall Grass', { ...PLANT, textures: tex(TILE.TALL_GRASS), drop: null, replaceable: true, color: '#56973a' });
 define(B.FLOWER_RED, 'Red Flower', { ...PLANT, textures: tex(TILE.FLOWER_RED), color: '#c4362c' });
 define(B.FLOWER_YELLOW, 'Yellow Flower', { ...PLANT, textures: tex(TILE.FLOWER_YELLOW), color: '#e6c534' });
 define(B.BIRCH_LOG, 'Birch Log', {
   textures: tex(TILE.BIRCH_LOG_TOP, TILE.BIRCH_LOG_SIDE), hardness: 2, tool: 'axe', sound: 'wood', color: '#d9d4c8',
 });
-define(B.BIRCH_LEAVES, 'Birch Leaves', { ...LEAF, textures: tex(TILE.BIRCH_LEAVES), color: '#6f9c3e' });
+define(B.BIRCH_LEAVES, 'Birch Leaves', { ...LEAF, textures: tex(TILE.BIRCH_LEAVES), color: '#57852f' });
 define(B.SPRUCE_LOG, 'Spruce Log', {
   textures: tex(TILE.SPRUCE_LOG_TOP, TILE.SPRUCE_LOG_SIDE), hardness: 2, tool: 'axe', sound: 'wood', color: '#3d2a1c',
 });
-define(B.SPRUCE_LEAVES, 'Spruce Leaves', { ...LEAF, textures: tex(TILE.SPRUCE_LEAVES), color: '#2b5a3d' });
+define(B.SPRUCE_LEAVES, 'Spruce Leaves', { ...LEAF, textures: tex(TILE.SPRUCE_LEAVES), color: '#1e4830' });
 // Dead bushes snap into a stick when broken.
 define(B.DEAD_BUSH, 'Dead Bush', { ...PLANT, textures: tex(TILE.DEAD_BUSH), drop: ITEM_STICK, replaceable: true, color: '#8a6233' });
 define(B.MOSSY_COBBLESTONE, 'Mossy Cobblestone', {
-  textures: tex(TILE.MOSSY_COBBLESTONE), hardness: 2, tool: 'pickaxe', minTier: 0, color: '#6c7b5e',
+  textures: tex(TILE.MOSSY_COBBLESTONE), hardness: 2, tool: 'pickaxe', minTier: 0, color: '#5c7050',
 });
-define(B.STONE_BRICKS, 'Stone Bricks', { textures: tex(TILE.STONE_BRICKS), hardness: 1.5, tool: 'pickaxe', minTier: 0, color: '#7b7a7c' });
+define(B.STONE_BRICKS, 'Stone Bricks', { textures: tex(TILE.STONE_BRICKS), hardness: 1.5, tool: 'pickaxe', minTier: 0, color: '#6d6c6e' });
 define(B.BOOKSHELF, 'Bookshelf', { textures: tex(TILE.PLANKS, TILE.BOOKSHELF), hardness: 1.5, tool: 'axe', sound: 'wood', color: '#6e5136' });
 define(B.WOOL_WHITE, 'White Wool', { ...WOOL, textures: tex(TILE.WOOL_WHITE), color: '#e4e6e6' });
 define(B.WOOL_RED, 'Red Wool', { ...WOOL, textures: tex(TILE.WOOL_RED), color: '#ae3b33' });
@@ -266,14 +266,14 @@ define(B.WOOL_GREEN, 'Green Wool', { ...WOOL, textures: tex(TILE.WOOL_GREEN), co
 define(B.WOOL_BLACK, 'Black Wool', { ...WOOL, textures: tex(TILE.WOOL_BLACK), color: '#29292e' });
 define(B.COAL_BLOCK, 'Coal Block', { ...METAL, textures: tex(TILE.COAL_BLOCK), minTier: 0, color: '#252527' });
 define(B.IRON_BLOCK, 'Iron Block', { ...METAL, textures: tex(TILE.IRON_BLOCK), minTier: 1, color: '#cbcbcd' });
-define(B.GOLD_BLOCK, 'Gold Block', { ...METAL, textures: tex(TILE.GOLD_BLOCK), hardness: 3, minTier: 2, color: '#e8c03c' });
-define(B.DIAMOND_BLOCK, 'Diamond Block', { ...METAL, textures: tex(TILE.DIAMOND_BLOCK), minTier: 2, color: '#62ddd4' });
+define(B.GOLD_BLOCK, 'Gold Block', { ...METAL, textures: tex(TILE.GOLD_BLOCK), hardness: 3, minTier: 2, color: '#d6b036' });
+define(B.DIAMOND_BLOCK, 'Diamond Block', { ...METAL, textures: tex(TILE.DIAMOND_BLOCK), minTier: 2, color: '#60cbc3' });
 define(B.OBSIDIAN, 'Obsidian', { textures: tex(TILE.OBSIDIAN), hardness: 50, tool: 'pickaxe', minTier: 3, color: '#1f152c' });
 define(B.PUMPKIN, 'Pumpkin', {
   textures: tex(TILE.PUMPKIN_TOP, TILE.PUMPKIN_SIDE, TILE.PUMPKIN_BOTTOM, TILE.PUMPKIN_FRONT),
   hardness: 1, tool: 'axe', sound: 'wood', color: '#d27a1e',
 });
-define(B.MELON, 'Melon', { textures: tex(TILE.MELON_TOP, TILE.MELON_SIDE), hardness: 1, tool: 'axe', sound: 'wood', color: '#5f962a' });
+define(B.MELON, 'Melon', { textures: tex(TILE.MELON_TOP, TILE.MELON_SIDE), hardness: 1, tool: 'axe', sound: 'wood', color: '#4d7e22' });
 
 // ---------------------------------------------------------------------------------------------
 // Lookups.
