@@ -40,8 +40,9 @@
         var canvas = document.getElementById('canvas');
         canvas.addEventListener('webglcontextlost', function (e) {
           e.preventDefault();
-          statusText.textContent = 'The graphics context was lost. Reload the page to keep playing.';
+          statusText.textContent = 'The graphics context was lost.';
           statusBox.hidden = false;
+          postToHost('error');
         });
         canvas.addEventListener('click', function () {
           if (canvas.requestPointerLock) canvas.requestPointerLock();
@@ -78,20 +79,46 @@
     Module.desiredHeight = 600;
     Module.autoexec = function () { Module.setStatus(''); };
 
-    var lastFrags = -1;
+    // Frag tracking. The arena is a timed match: after 10 minutes the engine ends it, reloads
+    // the map, resets your frags to 0 and deletes every bot. Bank the frags when the match
+    // clock runs out so progress carries over, and add bots back after every (re)load.
+    var mapLoads = 0;
+    var banked = 0;
+    var bankedThisMap = false;
+    var sawClock = false; // timeremaining reads 0 until the server sends the match length
+    var lastReported = null;
+    var poller = null;
+
+    function pollFrags() {
+      var frags = parseInt(BananaBread.executeString('getfrags'), 10);
+      var secs = parseInt(BananaBread.executeString('timeremaining'), 10);
+      if (isNaN(frags)) return;
+      if (secs > 0) sawClock = true;
+      if (sawClock && secs === 0 && !bankedThisMap) {
+        banked += frags;
+        bankedThisMap = true;
+      }
+      var total = bankedThisMap ? banked : banked + frags;
+      if (total !== lastReported) {
+        lastReported = total;
+        postToHost('frags:' + total);
+      }
+    }
+
     Module.postLoadWorld = function () {
+      mapLoads++;
       Module.tweakDetail();
       BananaBread.execute('sensitivity 10');
       BananaBread.execute('clearconsole');
       statusBox.hidden = true;
-      postToHost('ready');
-      setInterval(function () {
-        var frags = parseInt(BananaBread.executeString('getfrags'), 10);
-        if (!isNaN(frags) && frags !== lastFrags) {
-          lastFrags = frags;
-          postToHost('frags:' + frags);
-        }
-      }, 500);
+      bankedThisMap = false;
+      sawClock = false;
+      // The stock setup adds a single bot 20 s after the first load; add one straight away so
+      // there is always a target, and replace the bots a match reload deletes.
+      BananaBread.execute('addbot 40');
+      if (mapLoads > 1) BananaBread.execute('addbot 50');
+      postToHost(mapLoads > 1 ? 'reloaded' : 'ready');
+      if (!poller) poller = setInterval(pollFrags, 500);
     };
 
     window.addEventListener('message', function (e) {

@@ -4,8 +4,9 @@
 // with postMessage({ source, event }).
 (function () {
   const FRAG_TARGET = 10;
-  const STAGE1_URL = 'games/roomforchange/index.html?v=3';
-  const STAGE2_URL = 'games/bananabread/arena.html?v=3';
+  const ARENA_LOAD_TIMEOUT = 120000; // ms before a stalled arena load offers a retry
+  const STAGE1_URL = 'games/roomforchange/index.html?v=4';
+  const STAGE2_URL = 'games/bananabread/arena.html?v=4';
   const STAGE2_FILES = ['bb.wasm', 'bb.js', 'base.data', 'character.data', 'low.data'];
 
   const wrap = document.getElementById('raid-frame');
@@ -31,6 +32,7 @@
   let runningSince = null;
   let clock = null;
   let onOverlayClick = null;
+  let arenaWatchdog = null;
 
   function fmt(ms) {
     const total = Math.floor(ms / 1000);
@@ -129,6 +131,7 @@
   }
 
   function removeFrame() {
+    clearTimeout(arenaWatchdog);
     focusVeil.hidden = true;
     if (!frame) return;
     frame.src = 'about:blank';
@@ -168,7 +171,7 @@
     overlay.hidden = true;
     loadFrame(STAGE1_URL, 'Stage 1: Room for Change');
     controlsEl.textContent =
-      'Stage 1 controls: Space to start · Arrow keys move · Z attacks and pulls levers · X drops a bomb.';
+      'Stage 1 controls: Space starts · Arrow keys move · Z attacks, or pulls a lever (then tap an arrow to slide your row or column of rooms) · X drops a bomb · Avoid pits, they kill instantly.';
     prefetchArena();
   }
 
@@ -196,7 +199,23 @@
     fragsEl.textContent = 0;
     loadFrame(STAGE2_URL, 'Stage 2: BananaBread arena');
     controlsEl.textContent =
-      'Stage 2 controls: click the arena to aim with the mouse · WASD move · Click shoots · Space jumps · 1–6 switch weapons · Esc frees the mouse.';
+      'Stage 2 controls: click the arena to aim · WASD move · Left click shoots · Space or right click jumps · 1–5 switch weapons · Rockets and grenades up close cost you a frag · Esc frees the mouse.';
+    clearTimeout(arenaWatchdog);
+    arenaWatchdog = setTimeout(arenaFailed, ARENA_LOAD_TIMEOUT);
+  }
+
+  // The arena couldn't start (no WebGL/WebAssembly, a failed download, a lost graphics
+  // context) or is stuck loading. Keep the stage 1 time and offer another try.
+  function arenaFailed() {
+    if (stage !== 'arena') return;
+    pauseClock();
+    removeFrame();
+    showOverlay(
+      "The arena didn't load",
+      'Stage 2 needs a browser with WebGL and WebAssembly, and a ~25 MB download. Your stage 1 time is kept.',
+      'Retry arena',
+      startArena
+    );
   }
 
   function finishRun() {
@@ -249,6 +268,7 @@
       }
     } else if (data.source === 'bananabread' && stage === 'arena') {
       if (event === 'ready') {
+        clearTimeout(arenaWatchdog);
         resumeClock();
         focusFrame();
         frame.contentWindow.postMessage(
@@ -259,8 +279,13 @@
         const frags = Number(arg) || 0;
         fragsEl.textContent = frags;
         if (frags >= FRAG_TARGET) finishRun();
+      } else if (event === 'reloaded') {
+        frame.contentWindow.postMessage(
+          { target: 'bananabread', echo: 'New match! Your frags carry over.' },
+          '*'
+        );
       } else if (event === 'error') {
-        pauseClock();
+        arenaFailed();
       }
     }
   });
